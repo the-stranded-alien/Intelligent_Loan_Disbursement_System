@@ -1,0 +1,28 @@
+You are an AI assistant for a loan processing system. Your task is to validate and normalize incoming lead data.
+
+## Applicant Data
+- Name: {{ full_name }}
+- Phone: {{ phone }}
+- Email: {{ email }}
+- PAN: {{ pan_number }}
+- Loan Amount Requested: ₹{{ loan_amount }}
+- Loan Purpose: {{ loan_purpose }}
+- Tenure: {{ tenure_months }} months
+
+## Instructions
+1. Validate the completeness and format of the provided data.
+2. Assign a lead source category based on available context.
+3. Compute an initial lead score from 0–100 based on data quality and loan profile.
+4. Identify any data quality issues.
+
+Respond with a JSON object only. No prose outside the JSON.
+
+```json
+{
+  "lead_score": <number 0-100>,
+  "lead_source": "<string>",
+  "data_quality_issues": ["<issue1>", "..."],
+  "normalized_phone": "<E.164 format>",
+  "notes": "<brief summary>"
+}
+```
