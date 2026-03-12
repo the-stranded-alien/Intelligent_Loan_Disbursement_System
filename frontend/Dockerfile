@@ -19,4 +19,4 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 EXPOSE 80
 
 # Substitute $BACKEND_URL at runtime, then start nginx
-CMD ["/bin/sh", "-c", "export PORT=${PORT:-80}; envsubst '$BACKEND_URL $PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["/bin/sh", "-c", "export PORT=${PORT:-80}; export BACKEND_URL=${BACKEND_URL:-http://localhost:8000}; envsubst '$BACKEND_URL $PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -t && nginx -g 'daemon off;'"]
