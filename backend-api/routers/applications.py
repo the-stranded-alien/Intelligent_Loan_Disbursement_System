@@ -1,27 +1,120 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+import uuid
+from datetime import datetime, timezone
+
+from db.session import SessionLocal
+from db.models import Application
 
 router = APIRouter()
 
 
+class ApplicationCreate(BaseModel):
+    full_name: str
+    phone: str
+    email: str
+    pan_number: str
+    loan_amount: float
+    loan_purpose: str | None = None
+    tenure_months: int | None = None
+
 @router.post("/")
-async def create_application():
-    # TODO: Accept loan application, publish to Redis Streams, return application_id
-    pass
+async def create_application(payload: ApplicationCreate):
+    db = SessionLocal()
+    try:
+        app = Application(
+            id=str(uuid.uuid4()),
+            full_name=payload.full_name,
+            phone=payload.phone,
+            email=payload.email,
+            pan_number=payload.pan_number,
+            loan_amount=payload.loan_amount,
+            loan_purpose=payload.loan_purpose,
+            tenure_months=payload.tenure_months,
+            status="pending",
+            current_stage="lead_capture",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.add(app)
+        db.commit()
+        db.refresh(app)
+        return {"application_id": app.id, "status": app.status, "stage": app.current_stage}
+    finally:
+        db.close()
+    
 
 
-@router.get("/{application_id}")
-async def get_application(application_id: str):
-    # TODO: Fetch application status + pipeline stage
-    pass
+@router.get("/")
+async def list_applications(
+    page: int = 1,
+    page_size: int = 10,
+    status: str | None = None,
+    search: str | None = None,
+):
+    db = SessionLocal()
+    try:
+        q = db.query(Application)
+        if status:
+            q = q.filter(Application.status == status)
+        if search:
+            term = f"%{search}%"
+            q = q.filter(
+                Application.full_name.ilike(term)
+                | Application.email.ilike(term)
+                | Application.pan_number.ilike(term)
+            )
+        total = q.count()
+        apps = q.order_by(Application.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        return {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, (total + page_size - 1) // page_size),
+            "items": [
+                {
+                    "id": a.id, "full_name": a.full_name, "email": a.email,
+                    "pan_number": a.pan_number, "loan_amount": a.loan_amount,
+                    "loan_purpose": a.loan_purpose, "tenure_months": a.tenure_months,
+                    "status": a.status, "stage": a.current_stage, "created_at": str(a.created_at),
+                }
+                for a in apps
+            ],
+        }
+    finally:
+        db.close()
 
 
 @router.get("/{application_id}/status")
 async def get_application_status(application_id: str):
-    # TODO: Return detailed pipeline status with each node result
-    pass
+    db = SessionLocal()
+    try:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+        return {
+            "application_id": app.id,
+            "status": app.status,
+            "current_stage": app.current_stage,
+            "updated_at": str(app.updated_at),
+        }
+    finally:
+        db.close()
 
 
-@router.get("/")
-async def list_applications():
-    # TODO: List applications with filters (status, date range, RM)
-    pass
+@router.get("/{application_id}")
+async def get_application(application_id: str):
+    db = SessionLocal()
+    try:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+        return {
+            "id": app.id, "full_name": app.full_name, "phone": app.phone,
+            "email": app.email, "pan_number": app.pan_number,
+            "loan_amount": app.loan_amount, "loan_purpose": app.loan_purpose,
+            "tenure_months": app.tenure_months, "status": app.status,
+            "stage": app.current_stage, "created_at": str(app.created_at),
+        }
+    finally:
+        db.close()

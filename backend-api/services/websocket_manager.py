@@ -8,16 +8,27 @@ class WebSocketManager:
         self.active_connections: dict[str, list[WebSocket]] = {}
 
     async def connect(self, application_id: str, websocket: WebSocket):
-        # TODO: Register websocket under application_id
-        pass
+        await websocket.accept()
+        if application_id not in self.active_connections:
+            self.active_connections[application_id] = []
+        self.active_connections[application_id].append(websocket)
 
     def disconnect(self, application_id: str, websocket: WebSocket):
-        # TODO: Remove websocket from active connections
-        pass
+        if application_id in self.active_connections:
+            self.active_connections[application_id].remove(websocket)
+            if not self.active_connections[application_id]:
+                del self.active_connections[application_id]
 
     async def broadcast(self, application_id: str, message: dict):
-        # TODO: Send message to all connections for application_id
-        pass
+        if application_id in self.active_connections:
+            dead = []
+            for ws in self.active_connections[application_id]:
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    dead.append(ws)
+            for ws in dead:
+                self.disconnect(application_id, ws)
 
 
 websocket_manager = WebSocketManager()
