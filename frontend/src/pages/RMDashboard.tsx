@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users, CheckCircle2, XCircle, Clock, ChevronRight, RefreshCw } from 'lucide-react'
+import { Users, CheckCircle2, Clock, ChevronRight, RefreshCw } from 'lucide-react'
 import AgentDecisionCard from '@/components/AgentDecisionCard'
 import WhatIfAnalysis from '@/components/WhatIfAnalysis'
 import { cn } from '@/lib/utils'
