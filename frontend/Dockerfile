@@ -11,12 +11,10 @@ RUN npx vite build
 # ── Production stage ─────────────────────────────────────────
 FROM nginx:alpine
 
-RUN apk add --no-cache gettext
-
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf.template
+
+# Place template in /etc/nginx/templates/ — the official nginx entrypoint
+# automatically runs envsubst on *.template files and outputs to /etc/nginx/conf.d/
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
-
-# Substitute $BACKEND_URL at runtime, then start nginx
-CMD ["/bin/sh", "-c", "export BACKEND_URL=${BACKEND_URL:-http://localhost:8000}; envsubst '$BACKEND_URL' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -t && nginx -g 'daemon off;'"]
