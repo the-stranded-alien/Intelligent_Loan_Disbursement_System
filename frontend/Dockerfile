@@ -13,10 +13,15 @@ FROM nginx:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Official nginx entrypoint substitutes env vars in *.template files
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+# Template — entrypoint substitutes ${PORT} and ${BACKEND_URL} at runtime
+COPY nginx.conf /etc/nginx/conf.d/default.conf.template
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Defaults — Railway env vars override these at runtime
 ENV BACKEND_URL=http://localhost:8000
+ENV PORT=80
 
 EXPOSE 80
+
+ENTRYPOINT ["/entrypoint.sh"]
