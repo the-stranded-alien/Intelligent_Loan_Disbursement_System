@@ -13,15 +13,7 @@ FROM nginx:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Place template in /etc/nginx/templates/ — the official nginx entrypoint
-# automatically runs envsubst on *.template files and outputs to /etc/nginx/conf.d/
+# Official nginx entrypoint substitutes env vars in *.template files
 COPY nginx.conf /etc/nginx/templates/default.conf.template
-COPY docker-entrypoint-override.sh /docker-entrypoint-override.sh
-RUN chmod +x /docker-entrypoint-override.sh
 
 EXPOSE 80
-
-# Override entrypoint to inject RESOLVER from /etc/resolv.conf before
-# the official nginx entrypoint processes templates
-ENTRYPOINT ["/docker-entrypoint-override.sh"]
-CMD ["nginx", "-g", "daemon off;"]
