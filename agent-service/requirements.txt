@@ -4,7 +4,6 @@ celery==5.4.0
 redis==5.2.1
 langgraph==0.2.73
 langchain-anthropic==0.3.3
-langchain-core==0.3.29
 anthropic==0.45.0
 langgraph-checkpoint-postgres
 psycopg[binary]>=3.0.0
