@@ -39,10 +39,13 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
 
     config = {"configurable": {"thread_id": application_id}}
 
-    try:
-        checkpointer = get_checkpointer()
+    async def _run():
+        checkpointer = await get_checkpointer()
         graph = build_graph(checkpointer=checkpointer)
-        result = asyncio.run(graph.ainvoke(initial_state, config=config))
+        return await graph.ainvoke(initial_state, config=config)
+
+    try:
+        result = asyncio.run(_run())
         event_publisher.publish(
             stream="loan:events",
             event_type="node.completed",

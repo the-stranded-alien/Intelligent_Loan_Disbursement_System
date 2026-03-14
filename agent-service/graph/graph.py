@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from graph.state import ApplicationState
 from graph.router import route_after_qualification, route_after_fraud, route_after_sanction
@@ -14,7 +14,7 @@ from agents.sanction_processing.agent import run_sanction_processing
 from agents.disbursement.agent import run_disbursement
 
 
-def build_graph(checkpointer: PostgresSaver | None = None) -> StateGraph:
+def build_graph(checkpointer: AsyncPostgresSaver | None = None) -> StateGraph:
     """Build and compile the 9-node LangGraph pipeline."""
     builder = StateGraph(ApplicationState)
 
