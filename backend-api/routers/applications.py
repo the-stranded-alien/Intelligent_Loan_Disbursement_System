@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from db.session import SessionLocal
 from db.models import Application
+from services.event_publisher import event_publisher
 
 router = APIRouter()
 
@@ -39,6 +40,23 @@ async def create_application(payload: ApplicationCreate):
         db.add(app)
         db.commit()
         db.refresh(app)
+
+        event_publisher.publish(
+            stream="loan:applications",
+            event_type="application.created",
+            payload={
+                "application_id": app.id,
+                "full_name": app.full_name,
+                "phone": app.phone,
+                "email": app.email,
+                "pan_number": app.pan_number,
+                "loan_amount": app.loan_amount,
+                "loan_purpose": app.loan_purpose or "",
+                "tenure_months": app.tenure_months or 12,
+                "created_at": str(app.created_at),
+            }
+        )
+
         return {"application_id": app.id, "status": app.status, "stage": app.current_stage}
     finally:
         db.close()

@@ -1,29 +1,84 @@
 import asyncio
+import json
+import logging
+from datetime import datetime, timezone
+
 import redis.asyncio as aioredis
+
 from config.settings import settings
+from db.session import SessionLocal
+from db.models import Application
+from services.websocket_manager import websocket_manager
+
+logger = logging.getLogger(__name__)
 
 
 class EventConsumer:
-    """Consumes events from Redis Streams."""
+    STREAM = "loan:events"
+    GROUP = "backend-api-group"
+    CONSUMER = "backend-api-1"
 
-    def __init__(self, streams: list[str], group: str, consumer: str):
-        self.streams = streams
-        self.group = group
-        self.consumer = consumer
+    def __init__(self):
         self._client: aioredis.Redis | None = None
+        self._running = False
 
     async def connect(self):
-        # TODO: Initialize Redis connection, create consumer groups
-        pass
+        self._client = aioredis.from_url(settings.redis_streams_url, decode_responses=True)
+        try:
+            await self._client.xgroup_create(self.STREAM, self.GROUP, id="0", mkstream=True)
+        except Exception:
+            pass
 
     async def consume(self):
-        # TODO: XREADGROUP loop, dispatch events to handlers
-        pass
+        self._running = True
+        logger.info("Backend event consumer started")
+        while self._running:
+            try:
+                results = await self._client.xreadgroup(
+                    groupname=self.GROUP,
+                    consumername=self.CONSUMER,
+                    streams={self.STREAM: ">"},
+                    count=10,
+                    block=2000,
+                )
+                if not results:
+                    continue
+                for _stream, messages in results:
+                    for msg_id, fields in messages:
+                        await self._handle(msg_id, fields)
+            except Exception as e:
+                logger.error("Backend consumer error: %s", e)
+                await asyncio.sleep(2)
 
-    async def ack(self, stream: str, message_id: str):
-        # TODO: XACK processed message
-        pass
+    async def _handle(self, msg_id: str, fields: dict):
+        event_type = fields.get("event_type")
+        try:
+            payload = json.loads(fields.get("payload", "{}"))
+        except Exception:
+            payload = {}
+
+        if event_type == "node.completed":
+            application_id = payload.get("application_id")
+            stage = payload.get("stage")
+            db = SessionLocal()
+            try:
+                app = db.query(Application).filter(Application.id == application_id).first()
+                if app:
+                    app.current_stage = stage
+                    app.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+            finally:
+                db.close()
+
+            await websocket_manager.broadcast(application_id, {
+                "event": "node.completed",
+                "stage": stage,
+                "data": payload,
+            })
+
+        await self._client.xack(self.STREAM, self.GROUP, msg_id)
 
     async def close(self):
-        # TODO: Close Redis connection
-        pass
+        self._running = False
+        if self._client:
+            await self._client.aclose()
