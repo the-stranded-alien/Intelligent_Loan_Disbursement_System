@@ -5,7 +5,7 @@ from config.settings import settings
 
 def get_checkpointer() -> PostgresSaver:
     """Return a PostgresSaver connected to the configured DATABASE_URL."""
-    conn = psycopg.connect(settings.database_url)
+    conn = psycopg.connect(settings.database_url, autocommit=True, prepare_threshold=0)
     saver = PostgresSaver(conn)
     saver.setup()   # creates checkpoint tables if they don't exist
     return saver
