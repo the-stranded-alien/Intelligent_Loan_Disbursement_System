@@ -1,3 +1,4 @@
+import json
 import redis
 from config.settings import settings
 
@@ -9,16 +10,22 @@ class EventPublisher:
         self._client: redis.Redis | None = None
 
     def connect(self):
-        # TODO: Initialize Redis sync client (Celery tasks are sync)
-        pass
+        self._client = redis.from_url(settings.redis_streams_url, decode_responses=True)
 
     def publish(self, stream: str, event_type: str, payload: dict) -> str:
-        # TODO: XADD to Redis stream, return message ID
-        pass
+        if not self._client:
+            self.connect()
+        try:
+            msg_id = self._client.xadd(
+                stream,
+                {"event_type": event_type, "payload": json.dumps(payload)},
+            )
+            return msg_id
+        except Exception:
+            return None
 
     def close(self):
-        # TODO: Close Redis connection
-        pass
-
+        if self._client:
+            self._client.close()
 
 event_publisher = EventPublisher()
