@@ -41,7 +41,7 @@ function waitingLabel(since: string) {
 function QueueCard({
   item, selected, onClick,
 }: { item: QueueItem; selected: boolean; onClick: () => void }) {
-  const large = item.loan_amount > 1_000_000
+  const large = item.loan_amount > 200_000
   return (
     <button
       onClick={onClick}

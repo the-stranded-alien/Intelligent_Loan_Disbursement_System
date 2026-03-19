@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     rag_collection_name: str = "compliance_policies"
 
     # Pipeline
-    hitl_threshold: int = 1_000_000
+    hitl_threshold: int = 200_000
     disbursement_max_retries: int = 4
 
     # App

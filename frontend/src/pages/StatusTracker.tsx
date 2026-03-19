@@ -23,7 +23,7 @@ interface AppStatus {
 interface EventEntry {
   event: string
   actor: string
-  payload: { stage?: string; result?: Record<string, unknown> } | null
+  payload: { stage?: string; result?: Record<string, unknown>; [key: string]: unknown } | null
   at: string
 }
 
@@ -60,15 +60,6 @@ export default function StatusTracker() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [copied, setCopied]   = useState(false)
-
-  // Build stageResults from audit events
-  const stageResults: Record<string, Record<string, unknown>> = {}
-  for (const ev of events) {
-    if (ev.event.startsWith('stage.') && ev.event.endsWith('.completed') && ev.payload?.result) {
-      const stage = ev.payload.stage
-      if (stage) stageResults[stage] = ev.payload.result as Record<string, unknown>
-    }
-  }
 
   // ── Live WebSocket — owned here and passed to children ──────────────────
   const { events: wsEvents, connected: wsConnected } = useWorkflowSocket(appId || undefined)
@@ -244,7 +235,7 @@ export default function StatusTracker() {
               <WorkflowTimeline
                 currentStage={status.current_stage}
                 applicationStatus={status.status}
-                stageResults={Object.keys(stageResults).length > 0 ? stageResults : undefined}
+                auditEvents={events}
               />
 
               {/* App ID with copy */}
@@ -270,17 +261,7 @@ export default function StatusTracker() {
             </div>
           </div>
 
-          {/* Stage results section — shown when audit data has AI decisions */}
-          {Object.keys(stageResults).length > 0 && (
-            <div className="card p-5 space-y-3">
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                AI Decisions per Stage
-              </p>
-              <p className="text-xs text-slate-400">
-                Click any completed stage in the timeline above to expand its AI reasoning.
-              </p>
-            </div>
-          )}
+
         </div>
       )}
 
