@@ -19,7 +19,12 @@ logger = logging.getLogger(__name__)
     queue="agent",
 )
 def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
-    """Start a new LangGraph pipeline run for an application."""
+    """Start a new LangGraph pipeline run for an application.
+
+    The graph has interrupt_before=["sanction_processing"], so ainvoke() always
+    pauses after document_collection. For loans > HITL_THRESHOLD we wait for RM
+    review; for smaller loans we immediately resume.
+    """
     initial_state: ApplicationState = {
         "application_id": application_id,
         "full_name": initial_data.get("full_name", ""),
@@ -42,21 +47,52 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
     async def _run():
         checkpointer = await get_checkpointer()
         graph = build_graph(checkpointer=checkpointer)
-        return await graph.ainvoke(initial_state, config=config)
+
+        # First ainvoke — runs lead_capture through document_collection,
+        # then pauses before sanction_processing (interrupt_before).
+        result = await graph.ainvoke(initial_state, config=config)
+
+        loan_amount = result.get("loan_amount", 0)
+        if loan_amount > settings.hitl_threshold:
+            # Signal backend-api to mark application as pending_review and
+            # surface it in the RM dashboard. Pipeline resumes via resume_pipeline
+            # once the RM submits a decision.
+            event_publisher.publish(
+                stream="loan:events",
+                event_type="hitl.requested",
+                payload={
+                    "application_id": application_id,
+                    "loan_amount": loan_amount,
+                    "stage_results": result.get("stage_results", {}),
+                },
+            )
+            logger.info("Pipeline paused for HITL review: %s (₹%s)", application_id, loan_amount)
+            return result
+
+        # Small loan — auto-resume through sanction_processing → disbursement.
+        result = await graph.ainvoke(None, config=config)
+        return result
 
     try:
         result = asyncio.run(_run())
-        event_publisher.publish(
-            stream="loan:events",
-            event_type="node.completed",
-            payload={
-                "application_id": application_id,
-                "stage": result.get("current_stage"),
-                "lead_score": result.get("lead_score"),
-                "stage_results": result.get("stage_results", {}),
-            },
-        )
-        logger.info("Pipeline completed for %s at stage %s", application_id, result.get("current_stage"))
+
+        # Only publish pipeline.completed when the pipeline fully finished
+        # (i.e. not waiting for HITL). For HITL cases the hitl.requested event
+        # was already published above; pipeline.completed fires from resume_pipeline.
+        if not (result.get("loan_amount", 0) > settings.hitl_threshold and
+                result.get("hitl_decision") is None):
+            event_publisher.publish(
+                stream="loan:events",
+                event_type="pipeline.completed",
+                payload={
+                    "application_id": application_id,
+                    "stage": result.get("current_stage"),
+                    "lead_score": result.get("lead_score"),
+                    "stage_results": result.get("stage_results", {}),
+                },
+            )
+
+        logger.info("Pipeline task done for %s at stage %s", application_id, result.get("current_stage"))
         return {"application_id": application_id, "stage": result.get("current_stage")}
     except Exception as exc:
         logger.error("Pipeline error for %s: %s", application_id, exc)
@@ -71,9 +107,49 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
     queue="agent",
 )
 def resume_pipeline(self: Task, application_id: str, hitl_decision: dict) -> dict:
-    """Resume a pipeline that was interrupted at the HITL node."""
-    # TODO: implement in a later step
-    pass
+    """Resume a pipeline that was interrupted at the HITL node.
+
+    Injects the RM decision into the checkpoint state, then resumes the graph
+    from sanction_processing through to disbursement.
+    """
+    config = {"configurable": {"thread_id": application_id}}
+
+    async def _resume():
+        checkpointer = await get_checkpointer()
+        graph = build_graph(checkpointer=checkpointer)
+
+        # Inject the RM decision into the persisted checkpoint state so that
+        # sanction_processing can see it when the graph resumes.
+        await graph.aupdate_state(
+            config,
+            values={
+                "hitl_decision": hitl_decision.get("decision"),
+                "hitl_notes": hitl_decision.get("notes", ""),
+                "rm_id": hitl_decision.get("rm_id", ""),
+            },
+        )
+
+        # Resume — graph continues from sanction_processing.
+        result = await graph.ainvoke(None, config=config)
+        return result
+
+    try:
+        result = asyncio.run(_resume())
+        event_publisher.publish(
+            stream="loan:events",
+            event_type="pipeline.completed",
+            payload={
+                "application_id": application_id,
+                "stage": result.get("current_stage"),
+                "lead_score": result.get("lead_score"),
+                "stage_results": result.get("stage_results", {}),
+            },
+        )
+        logger.info("Pipeline resumed and completed for %s", application_id)
+        return {"application_id": application_id, "stage": result.get("current_stage")}
+    except Exception as exc:
+        logger.error("Resume pipeline error for %s: %s", application_id, exc)
+        raise self.retry(exc=exc)
 
 
 @celery_app.task(

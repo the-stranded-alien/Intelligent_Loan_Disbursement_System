@@ -1,4 +1,5 @@
 from graph.state import ApplicationState
+from services.event_publisher import event_publisher
 
 
 async def run_fraud_detection(state: ApplicationState) -> ApplicationState:
@@ -9,4 +10,14 @@ async def run_fraud_detection(state: ApplicationState) -> ApplicationState:
     """
     # TODO: Run fraud tools, render prompt with signals,
     #       parse JSON → fraud_risk_score, fraud_signals, fraud_decision
-    return {**state, "current_stage": "fraud_detection"}
+    updated_state = {**state, "current_stage": "fraud_detection"}
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.completed",
+        payload={
+            "application_id": state.get("application_id"),
+            "stage": "fraud_detection",
+            "stage_results": updated_state.get("stage_results", {}),
+        },
+    )
+    return updated_state

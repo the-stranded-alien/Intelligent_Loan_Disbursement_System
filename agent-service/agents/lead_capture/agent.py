@@ -8,6 +8,7 @@ from jinja2 import Template
 
 from graph.state import ApplicationState
 from config.settings import settings
+from services.event_publisher import event_publisher
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ async def run_lead_capture(state: ApplicationState) -> ApplicationState:
         raw = response.content[0].text
         result = _parse_response(raw)
 
-        return {
+        updated_state = {
             **state,
             "current_stage": "lead_capture",
             "lead_score": float(result.get("lead_score", 50)),
@@ -63,6 +64,16 @@ async def run_lead_capture(state: ApplicationState) -> ApplicationState:
                 "lead_capture": result,
             },
         }
+        event_publisher.publish(
+            stream="loan:events",
+            event_type="node.completed",
+            payload={
+                "application_id": state.get("application_id"),
+                "stage": "lead_capture",
+                "stage_results": updated_state.get("stage_results", {}),
+            },
+        )
+        return updated_state
     except Exception as e:
         logger.error("lead_capture failed for %s: %s", state.get("application_id"), e)
         return {

@@ -15,8 +15,8 @@ def route_after_fraud(state: ApplicationState) -> str:
 
 def route_after_sanction(state: ApplicationState) -> str:
     """Route after sanction_processing: disburse, await HITL interrupt, or reject."""
-    # TODO:
-    #   if state["hitl_required"] and state["hitl_decision"] is None: return "hitl"
-    #   if state["hitl_decision"] == "approve" or not state["hitl_required"]: return "disburse"
-    #   return "reject"
+    if state.get("hitl_required") and state.get("hitl_decision") is None:
+        return "hitl"
+    if state.get("hitl_decision") == "reject":
+        return "reject"
     return "disburse"

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from db.session import SessionLocal
 from db.models import Application, RMReview, AuditLog
 from schemas.rm import RMReviewSubmit
+from services.event_publisher import event_publisher
 
 router = APIRouter()
 
@@ -64,6 +65,20 @@ async def submit_review(application_id: str, payload: RMReviewSubmit):
             created_at=datetime.utcnow(),
         ))
         db.commit()
+
+        # Publish decision to the agent-service HITL consumer so it can
+        # enqueue resume_pipeline and continue the LangGraph run.
+        event_publisher.publish(
+            stream="loan:hitl:decisions",
+            event_type="hitl.decision",
+            payload={
+                "application_id": application_id,
+                "decision": payload.decision.value,
+                "notes": payload.notes or "",
+                "rm_id": "rm-system",
+            },
+        )
+
         return {"application_id": application_id, "decision": payload.decision.value, "status": app.status}
     finally:
         db.close()

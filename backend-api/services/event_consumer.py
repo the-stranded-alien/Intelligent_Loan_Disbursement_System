@@ -76,6 +76,44 @@ class EventConsumer:
                 "data": payload,
             })
 
+        elif event_type == "hitl.requested":
+            application_id = payload.get("application_id")
+            db = SessionLocal()
+            try:
+                app = db.query(Application).filter(Application.id == application_id).first()
+                if app:
+                    app.status = "pending_review"
+                    app.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+            finally:
+                db.close()
+
+            await websocket_manager.broadcast(application_id, {
+                "event": "hitl.requested",
+                "stage": "sanction_processing",
+                "data": payload,
+            })
+
+        elif event_type == "pipeline.completed":
+            application_id = payload.get("application_id")
+            stage = payload.get("stage")
+            db = SessionLocal()
+            try:
+                app = db.query(Application).filter(Application.id == application_id).first()
+                if app:
+                    app.status = "completed"
+                    app.current_stage = stage
+                    app.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+            finally:
+                db.close()
+
+            await websocket_manager.broadcast(application_id, {
+                "event": "pipeline.completed",
+                "stage": stage,
+                "data": payload,
+            })
+
         await self._client.xack(self.STREAM, self.GROUP, msg_id)
 
     async def close(self):
