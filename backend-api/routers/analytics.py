@@ -51,6 +51,39 @@ async def get_pipeline_metrics():
         db.close()
 
 
+@router.get("/agents")
+async def get_agent_metrics():
+    """Per-node rejection rates, HITL queue depth, and average loan amount."""
+    db = SessionLocal()
+    try:
+        stages = []
+        for stage in PIPELINE_STAGES:
+            at_stage = db.query(func.count(Application.id)).filter(
+                Application.current_stage == stage
+            ).scalar() or 0
+            rejected_here = db.query(func.count(Application.id)).filter(
+                Application.current_stage == stage,
+                Application.status == "rejected",
+            ).scalar() or 0
+            stages.append({
+                "stage": stage,
+                "total_at_stage": at_stage,
+                "rejected_at_stage": rejected_here,
+                "rejection_rate": round(rejected_here / at_stage * 100, 1) if at_stage else 0.0,
+            })
+        pending_hitl = db.query(func.count(Application.id)).filter(
+            Application.status == "pending_review"
+        ).scalar() or 0
+        avg_loan = db.query(func.avg(Application.loan_amount)).scalar() or 0.0
+        return {
+            "stages": stages,
+            "pending_hitl_review": pending_hitl,
+            "avg_loan_amount": round(float(avg_loan), 2),
+        }
+    finally:
+        db.close()
+
+
 @router.get("/disbursements")
 async def get_disbursement_metrics():
     db = SessionLocal()

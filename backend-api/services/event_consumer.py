@@ -1,13 +1,14 @@
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
 
 from config.settings import settings
 from db.session import SessionLocal
-from db.models import Application
+from db.models import Application, AuditLog
 from services.websocket_manager import websocket_manager
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,15 @@ class EventConsumer:
                 if app:
                     app.current_stage = stage
                     app.updated_at = datetime.now(timezone.utc)
+                    stage_result = payload.get("stage_results", {}).get(stage, {})
+                    db.add(AuditLog(
+                        id=str(uuid.uuid4()),
+                        application_id=application_id,
+                        event_type=f"stage.{stage}.completed",
+                        actor="agent-service",
+                        payload={"stage": stage, "result": stage_result},
+                        created_at=datetime.now(timezone.utc),
+                    ))
                     db.commit()
             finally:
                 db.close()

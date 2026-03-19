@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from db.session import SessionLocal
-from db.models import Application
+from db.models import Application, AuditLog
 from services.event_publisher import event_publisher
 
 router = APIRouter()
@@ -112,10 +112,36 @@ async def get_application_status(application_id: str):
             raise HTTPException(status_code=404, detail="Application not found")
         return {
             "application_id": app.id,
+            "full_name": app.full_name,
+            "loan_amount": app.loan_amount,
+            "loan_purpose": app.loan_purpose,
+            "tenure_months": app.tenure_months,
             "status": app.status,
             "current_stage": app.current_stage,
             "updated_at": str(app.updated_at),
+            "created_at": str(app.created_at),
         }
+    finally:
+        db.close()
+
+
+@router.get("/{application_id}/events")
+async def get_application_events(application_id: str):
+    db = SessionLocal()
+    try:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+        logs = (
+            db.query(AuditLog)
+            .filter(AuditLog.application_id == application_id)
+            .order_by(AuditLog.created_at)
+            .all()
+        )
+        return [
+            {"event": l.event_type, "actor": l.actor, "payload": l.payload, "at": str(l.created_at)}
+            for l in logs
+        ]
     finally:
         db.close()
 

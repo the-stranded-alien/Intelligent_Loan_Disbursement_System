@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Users, CheckCircle2, Clock, ChevronRight, RefreshCw } from 'lucide-react'
+import {
+  Users, CheckCircle2, Clock, ChevronRight, RefreshCw,
+  ArrowLeft, AlertCircle, Banknote,
+} from 'lucide-react'
 import AgentDecisionCard from '@/components/AgentDecisionCard'
 import WhatIfAnalysis from '@/components/WhatIfAnalysis'
 import { cn } from '@/lib/utils'
+
+// ── Types ──────────────────────────────────────────────────────────────────
 
 interface QueueItem {
   application_id: string
@@ -16,14 +21,73 @@ interface ReviewForm {
   notes: string
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function fmtAmt(n: number) {
+  if (n >= 10_000_000) return `₹${(n / 10_000_000).toFixed(1)}Cr`
+  if (n >= 100_000)    return `₹${(n / 100_000).toFixed(1)}L`
+  return `₹${Math.round(n).toLocaleString('en-IN')}`
+}
+
+function waitingLabel(since: string) {
+  const mins = Math.round((Date.now() - new Date(since).getTime()) / 60_000)
+  if (mins < 60)   return `${mins}m ago`
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`
+  return `${Math.round(mins / 1440)}d ago`
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+function QueueCard({
+  item, selected, onClick,
+}: { item: QueueItem; selected: boolean; onClick: () => void }) {
+  const large = item.loan_amount > 1_000_000
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'card p-4 w-full text-left transition-all hover:shadow-md active:scale-[0.98]',
+        selected && 'ring-2 ring-brand-500 shadow-md',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center flex-shrink-0">
+          <Users size={14} className="text-brand-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">
+              {item.applicant_name}
+            </p>
+            {large && (
+              <span className="badge bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 flex-shrink-0">
+                HITL
+              </span>
+            )}
+          </div>
+          <p className="font-bold text-brand-600 dark:text-brand-400 text-sm mt-0.5">
+            {fmtAmt(item.loan_amount)}
+          </p>
+          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+            <Clock size={10} /> {waitingLabel(item.waiting_since)}
+          </p>
+        </div>
+        <ChevronRight size={14} className="text-slate-300 mt-1 flex-shrink-0" />
+      </div>
+    </button>
+  )
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────
+
 export default function RMDashboard() {
-  const [queue, setQueue]               = useState<QueueItem[]>([])
-  const [selected, setSelected]         = useState<QueueItem | null>(null)
-  const [form, setForm]                 = useState<ReviewForm>({ decision: 'approve', notes: '' })
-  const [submitting, setSubmitting]     = useState(false)
-  const [successMsg, setSuccessMsg]     = useState('')
-  const [error, setError]               = useState('')
-  const [loading, setLoading]           = useState(false)
+  const [queue, setQueue]           = useState<QueueItem[]>([])
+  const [selected, setSelected]     = useState<QueueItem | null>(null)
+  const [form, setForm]             = useState<ReviewForm>({ decision: 'approve', notes: '' })
+  const [submitting, setSubmitting] = useState(false)
+  const [successMsg, setSuccessMsg] = useState('')
+  const [error, setError]           = useState('')
+  const [loading, setLoading]       = useState(false)
 
   async function loadQueue() {
     setLoading(true)
@@ -49,6 +113,7 @@ export default function RMDashboard() {
       if (!res.ok) throw new Error('Review submission failed')
       setSuccessMsg(`Decision recorded: ${form.decision}`)
       setSelected(null)
+      setForm({ decision: 'approve', notes: '' })
       await loadQueue()
       setTimeout(() => setSuccessMsg(''), 4000)
     } catch (e: unknown) {
@@ -58,99 +123,124 @@ export default function RMDashboard() {
     }
   }
 
-  const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`
+  const decisionConfig = {
+    approve:      { label: '✓ Approve',      active: 'bg-emerald-500 border-emerald-500 text-white', submit: 'bg-emerald-600 hover:bg-emerald-700' },
+    reject:       { label: '✕ Reject',       active: 'bg-red-500 border-red-500 text-white',         submit: 'bg-red-600 hover:bg-red-700' },
+    request_info: { label: '? Request Info', active: 'bg-amber-500 border-amber-500 text-white',     submit: 'bg-amber-500 hover:bg-amber-600' },
+  }
 
   return (
     <div className="space-y-6 animate-slide-up">
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">RM Dashboard</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Review and process HITL loan applications.</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+            Review and process HITL loan applications.
+          </p>
         </div>
         <button onClick={loadQueue} disabled={loading} className="btn-secondary flex items-center gap-2">
           <RefreshCw size={13} className={cn(loading && 'animate-spin')} />
-          Refresh
+          <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
 
+      {/* ── Toast ── */}
       {successMsg && (
         <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
           <CheckCircle2 size={14} /> {successMsg}
         </div>
       )}
 
+      {/* ── Layout ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Queue */}
-        <div className="lg:col-span-1 space-y-3">
-          <div className="flex items-center gap-2">
+
+        {/* Queue — hidden on mobile when item is selected */}
+        <div className={cn('lg:col-span-1 space-y-3', selected ? 'hidden lg:block' : 'block')}>
+          <div className="flex items-center gap-2 mb-1">
             <Users size={14} className="text-slate-500" />
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Pending Reviews</h2>
-            <span className="badge bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-400 ml-auto">{queue.length}</span>
+            <span className={cn(
+              'badge ml-auto',
+              queue.length > 0
+                ? 'bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-400'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-400',
+            )}>
+              {queue.length}
+            </span>
           </div>
 
           {queue.length === 0 && !loading && (
-            <div className="card p-8 text-center">
+            <div className="card p-10 text-center">
               <Clock size={24} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
               <p className="text-slate-400 text-sm">No applications pending review</p>
             </div>
           )}
 
           {queue.map(item => (
-            <button
+            <QueueCard
               key={item.application_id}
+              item={item}
+              selected={selected?.application_id === item.application_id}
               onClick={() => { setSelected(item); setError('') }}
-              className={cn(
-                'card p-4 w-full text-left transition-all hover:shadow-md',
-                selected?.application_id === item.application_id && 'ring-2 ring-brand-500'
-              )}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{item.applicant_name}</p>
-                  <p className="text-brand-600 dark:text-brand-400 font-bold text-sm mt-0.5">{fmt(item.loan_amount)}</p>
-                  <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                    <Clock size={10} /> {new Date(item.waiting_since).toLocaleString()}
-                  </p>
-                </div>
-                <ChevronRight size={14} className="text-slate-400 mt-1" />
-              </div>
-            </button>
+            />
           ))}
         </div>
 
         {/* Review panel */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className={cn('lg:col-span-2 space-y-4', selected ? 'block' : 'hidden lg:block')}>
+
           {!selected ? (
-            <div className="card p-12 text-center">
-              <Users size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+            <div className="card p-16 text-center">
+              <AlertCircle size={32} className="mx-auto text-slate-200 dark:text-slate-700 mb-3" />
               <p className="text-slate-400 text-sm">Select an application from the queue to review</p>
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              {/* Mobile back button + applicant header */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSelected(null)}
+                  className="lg:hidden p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <ArrowLeft size={16} className="text-slate-600 dark:text-slate-400" />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-slate-800 dark:text-slate-100 truncate">{selected.applicant_name}</p>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                    <Banknote size={11} className="text-brand-500" />
+                    <span className="font-semibold text-brand-600 dark:text-brand-400">{fmtAmt(selected.loan_amount)}</span>
+                    <span>·</span>
+                    <Clock size={10} />
+                    {waitingLabel(selected.waiting_since)}
+                  </div>
+                </div>
+              </div>
+
+              {/* AI context + simulator */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <AgentDecisionCard applicationId={selected.application_id} />
                 <WhatIfAnalysis applicationId={selected.application_id} />
               </div>
 
-              {/* Review form */}
+              {/* Decision form */}
               <div className="card p-5 space-y-4">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">Submit Decision</h3>
 
-                <div className="flex gap-2">
-                  {(['approve', 'reject', 'request_info'] as const).map(d => (
+                <div className="grid grid-cols-3 gap-2">
+                  {(Object.entries(decisionConfig) as [ReviewForm['decision'], typeof decisionConfig.approve][]).map(([d, cfg]) => (
                     <button
                       key={d}
                       onClick={() => setForm(f => ({ ...f, decision: d }))}
                       className={cn(
-                        'flex-1 py-2 rounded-lg text-xs font-medium border transition-colors',
+                        'py-2.5 rounded-xl text-xs font-semibold border transition-all active:scale-95',
                         form.decision === d
-                          ? d === 'approve'       ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : d === 'reject'        ? 'bg-red-500 border-red-500 text-white'
-                          :                         'bg-amber-500 border-amber-500 text-white'
-                          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
+                          ? cfg.active
+                          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600',
                       )}
                     >
-                      {d === 'approve' ? '✓ Approve' : d === 'reject' ? '✕ Reject' : '? Request Info'}
+                      {cfg.label}
                     </button>
                   ))}
                 </div>
@@ -165,17 +255,25 @@ export default function RMDashboard() {
                   />
                 </div>
 
-                {error && <p className="text-red-500 text-xs">{error}</p>}
+                {error && (
+                  <p className="text-red-500 text-xs flex items-center gap-1">
+                    <AlertCircle size={12} /> {error}
+                  </p>
+                )}
 
                 <div className="flex gap-3">
-                  <button onClick={() => setSelected(null)} className="btn-secondary">Cancel</button>
-                  <button onClick={submitReview} disabled={submitting} className={cn(
-                    'flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                    form.decision === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' :
-                    form.decision === 'reject'  ? 'bg-red-600 hover:bg-red-700 text-white' :
-                                                  'bg-amber-500 hover:bg-amber-600 text-white'
-                  )}>
-                    {submitting ? 'Submitting…' : `Submit ${form.decision}`}
+                  <button onClick={() => setSelected(null)} className="btn-secondary hidden lg:block">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitReview}
+                    disabled={submitting}
+                    className={cn(
+                      'flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors text-white disabled:opacity-50',
+                      decisionConfig[form.decision].submit,
+                    )}
+                  >
+                    {submitting ? 'Submitting…' : `Submit — ${decisionConfig[form.decision].label}`}
                   </button>
                 </div>
               </div>
