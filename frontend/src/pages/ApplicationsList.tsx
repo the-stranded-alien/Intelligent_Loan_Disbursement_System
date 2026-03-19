@@ -228,7 +228,7 @@ export default function ApplicationsList() {
                       className={cn(
                         'w-7 h-7 rounded-lg text-xs font-medium transition-colors',
                         data.page === n
-                          ? 'bg-brand-600 text-white'
+                          ? 'bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-sm'
                           : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                       )}
                     >

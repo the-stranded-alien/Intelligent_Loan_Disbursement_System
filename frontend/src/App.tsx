@@ -30,40 +30,46 @@ export default function App() {
     localStorage.setItem('theme', dark ? 'dark' : 'light')
   }, [dark])
 
-  // Close mobile menu on route change
   function closeMenu() { setMenuOpen(false) }
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 dot-pattern transition-colors duration-300">
+      <div className="min-h-screen mesh-bg transition-colors duration-300">
 
         {/* ── Nav bar ── */}
-        <nav className="sticky top-0 z-50 glass border-b border-slate-200 dark:border-slate-800">
+        <nav className="sticky top-0 z-50 glass border-b border-slate-200/60 dark:border-white/[0.06]">
           <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-2">
 
             {/* Logo */}
-            <div className="flex items-center gap-2 mr-4 flex-shrink-0">
-              <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center shadow-sm">
-                <Zap size={15} className="text-white" />
+            <div className="flex items-center gap-2.5 mr-5 flex-shrink-0">
+              <div className="relative w-8 h-8 flex-shrink-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-brand-500 to-violet-600 rounded-xl shadow-glow opacity-80 blur-[6px]" />
+                <div className="relative w-8 h-8 bg-gradient-to-br from-brand-500 to-violet-600 rounded-xl flex items-center justify-center shadow-inner-glow">
+                  <Zap size={15} className="text-white drop-shadow-sm" fill="currentColor" />
+                </div>
               </div>
-              <span className="font-bold text-slate-900 dark:text-white tracking-tight">LoanFlow</span>
+              <div className="flex flex-col leading-none">
+                <span className="font-bold text-slate-900 dark:text-white tracking-tight text-[15px]">LoanFlow</span>
+                <span className="text-[9px] font-medium text-brand-500 dark:text-brand-400 tracking-widest uppercase">AI Powered</span>
+              </div>
             </div>
 
             {/* Desktop nav links */}
-            <div className="hidden md:flex items-center gap-1 flex-1">
-              {navItems.map(({ to, label }) => (
+            <div className="hidden md:flex items-center gap-0.5 flex-1">
+              {navItems.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
                   end={to === '/'}
                   className={({ isActive }) =>
-                    `px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                       isActive
-                        ? 'bg-brand-600 text-white shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                        ? 'bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-sm shadow-brand-500/30'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:text-slate-900 dark:hover:text-white'
                     }`
                   }
                 >
+                  <Icon size={13} />
                   {label}
                 </NavLink>
               ))}
@@ -76,7 +82,7 @@ export default function App() {
               {/* Dark mode toggle */}
               <button
                 onClick={() => setDark(!dark)}
-                className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                className="p-2 rounded-xl bg-slate-100/80 dark:bg-white/[0.06] hover:bg-slate-200/80 dark:hover:bg-white/[0.1] transition-all duration-150 border border-slate-200/60 dark:border-white/[0.06]"
                 aria-label="Toggle dark mode"
               >
                 {dark
@@ -87,10 +93,12 @@ export default function App() {
               {/* Mobile hamburger */}
               <button
                 onClick={() => setMenuOpen(v => !v)}
-                className="md:hidden p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                className="md:hidden p-2 rounded-xl bg-slate-100/80 dark:bg-white/[0.06] hover:bg-slate-200/80 dark:hover:bg-white/[0.1] transition-all duration-150 border border-slate-200/60 dark:border-white/[0.06]"
                 aria-label="Toggle menu"
               >
-                {menuOpen ? <X size={17} className="text-slate-700 dark:text-slate-300" /> : <Menu size={17} className="text-slate-700 dark:text-slate-300" />}
+                {menuOpen
+                  ? <X size={17} className="text-slate-700 dark:text-slate-300" />
+                  : <Menu size={17} className="text-slate-700 dark:text-slate-300" />}
               </button>
             </div>
           </div>
@@ -99,13 +107,11 @@ export default function App() {
         {/* ── Mobile dropdown menu ── */}
         {menuOpen && (
           <>
-            {/* Backdrop */}
             <div
-              className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm md:hidden"
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden"
               onClick={closeMenu}
             />
-            {/* Menu panel */}
-            <div className="fixed top-14 left-0 right-0 z-50 md:hidden glass border-b border-slate-200 dark:border-slate-800 p-2 space-y-1 shadow-lg">
+            <div className="fixed top-14 left-0 right-0 z-50 md:hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/[0.06] p-2 space-y-1 shadow-xl">
               {navItems.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
@@ -115,8 +121,8 @@ export default function App() {
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                       isActive
-                        ? 'bg-brand-600 text-white'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        ? 'bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-sm shadow-brand-500/20'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06]'
                     }`
                   }
                 >
@@ -139,6 +145,28 @@ export default function App() {
             <Route path="/applications"          element={<ApplicationsList />} />
           </Routes>
         </main>
+
+        {/* ── Footer ── */}
+        <footer className="max-w-7xl mx-auto px-4 py-6 mt-4">
+          <div className="border-t border-slate-200/60 dark:border-white/[0.06] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-600">
+              <div className="w-4 h-4 bg-gradient-to-br from-brand-500 to-violet-600 rounded flex items-center justify-center">
+                <Zap size={9} className="text-white" fill="currentColor" />
+              </div>
+              <span>LoanFlow — Intelligent Loan Disbursement</span>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-600">
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                AI Pipeline Active
+              </span>
+              <span>·</span>
+              <span>Powered by Claude</span>
+              <span>·</span>
+              <span>LangGraph</span>
+            </div>
+          </div>
+        </footer>
       </div>
     </BrowserRouter>
   )
