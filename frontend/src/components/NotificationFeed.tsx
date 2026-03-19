@@ -1,8 +1,13 @@
-import { useWorkflowSocket } from '@/hooks/useWorkflowSocket'
+import { useWorkflowSocket, PipelineEvent } from '@/hooks/useWorkflowSocket'
 import { Wifi, WifiOff, Bell, CheckCircle2, Zap, AlertCircle, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface Props { applicationId?: string }
+interface Props {
+  applicationId?: string
+  // Optional: pass events/connected from a parent that already owns the socket
+  events?: PipelineEvent[]
+  connected?: boolean
+}
 
 // ── Event type config ──────────────────────────────────────────────────────
 
@@ -39,8 +44,11 @@ function stageLabel(stage?: string): string {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function NotificationFeed({ applicationId }: Props) {
-  const { events, connected } = useWorkflowSocket(applicationId)
+export default function NotificationFeed({ applicationId, events: propEvents, connected: propConnected }: Props) {
+  // Use the parent-provided socket data if available, otherwise open our own
+  const own = useWorkflowSocket(propEvents !== undefined ? undefined : applicationId)
+  const events    = propEvents    ?? own.events
+  const connected = propConnected ?? own.connected
 
   return (
     <div className="card p-5 space-y-3 h-full flex flex-col">

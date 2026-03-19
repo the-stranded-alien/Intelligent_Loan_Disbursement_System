@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Search, RefreshCw, Banknote, Calendar, User, Copy, Check } from 'lucide-react'
 import WorkflowTimeline from '@/components/WorkflowTimeline'
 import NotificationFeed from '@/components/NotificationFeed'
+import { useWorkflowSocket } from '@/hooks/useWorkflowSocket'
 import { cn } from '@/lib/utils'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -68,6 +69,31 @@ export default function StatusTracker() {
       if (stage) stageResults[stage] = ev.payload.result as Record<string, unknown>
     }
   }
+
+  // ── Live WebSocket — owned here and passed to children ──────────────────
+  const { events: wsEvents, connected: wsConnected } = useWorkflowSocket(appId || undefined)
+  const lastWsEvent = useRef<typeof wsEvents[0] | null>(null)
+
+  useEffect(() => {
+    const latest = wsEvents[0]
+    if (!latest || latest === lastWsEvent.current) return
+    lastWsEvent.current = latest
+
+    if (latest.event === 'node.completed' && latest.stage) {
+      // Immediately advance the current stage shown in the timeline
+      setStatus(s => s ? { ...s, current_stage: latest.stage! } : s)
+      // Background-fetch updated audit events to populate stage results
+      if (appId) {
+        fetch(`/api/v1/applications/${appId}/events`)
+          .then(r => r.ok ? r.json() : [])
+          .then(setEvents)
+          .catch(() => {})
+      }
+    } else if (latest.event === 'pipeline.completed' || latest.event === 'hitl.requested') {
+      // Full refetch to get accurate final status
+      if (appId) fetchStatus(appId)
+    }
+  }, [wsEvents])
 
   async function fetchStatus(id: string) {
     if (!id.trim()) return
@@ -234,9 +260,13 @@ export default function StatusTracker() {
               </div>
             </div>
 
-            {/* Live feed */}
+            {/* Live feed — reuses the same WS connection owned by this page */}
             <div className="min-h-[200px]">
-              <NotificationFeed applicationId={appId} />
+              <NotificationFeed
+                applicationId={appId}
+                events={wsEvents}
+                connected={wsConnected}
+              />
             </div>
           </div>
 
