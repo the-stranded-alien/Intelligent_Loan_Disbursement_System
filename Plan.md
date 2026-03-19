@@ -117,6 +117,122 @@ Scaffolded but entirely unwired. All work is in `notification-service/`.
 
 ---
 
+## Phase 5 — Capstone Excellence
+
+Four criteria must all be satisfied for the capstone submission. Each maps to concrete implementation work below.
+
+---
+
+### 5.1 — ≥ 3 Named Agents (Retriever · Analyst · Critic · Planner)
+
+The pipeline already has 9 nodes, but the capstone requires **explicitly named agent roles** that are architecturally visible — not just a chain of identical LLM calls. Map and implement as follows:
+
+| Capstone Role | Node(s) | What it does |
+|---|---|---|
+| **Retriever** | `compliance` | Queries pgvector (RBI guidelines, AML rules) via `policy_rag_tool` — retrieves relevant policy chunks and injects them into the prompt. This is the canonical Retriever: it fetches external knowledge the other agents need. |
+| **Analyst** | `credit_assessment`, `fraud_detection` | Runs structured quantitative analysis: credit scoring model + fraud signal scoring. Both produce numeric outputs (credit_score, fraud_risk_score) that downstream agents consume. |
+| **Critic** | `lead_qualification`, `identity_verification` | Reviews the Analyst's inputs and the applicant's submitted data, flags inconsistencies, and decides pass/fail with explicit reasoning (`qualification_notes`, `identity_provider_response`). |
+| **Planner** | `sanction_processing` | Synthesises all upstream outputs (credit, fraud, compliance, HITL if present) and produces the final action plan: sanctioned amount, interest rate, tenure, EMI schedule, terms. This is the Planner: it coordinates the pipeline's final decision. |
+
+**Implementation steps:**
+1. Add a `AGENT_ROLE` constant to each agent file (`"retriever"`, `"analyst"`, `"critic"`, `"planner"`) — used in trace logging (§5.2).
+2. Implement the Retriever role in `compliance/agent.py` (already listed in Phase 4 RAG item — promote it to Phase 5 critical path).
+3. Ensure Analyst nodes (`credit_assessment`, `fraud_detection`) produce **quantitative numeric outputs** — not just labels. Credit score must be an integer 300–900; fraud risk score must be a float 0–1.
+4. Ensure Critic nodes include an explicit `reasoning` field in their JSON output (e.g., `"qualification_reasoning": "..."`) — required for trace logging.
+5. `sanction_processing` prompt must reference all upstream agent outputs by name — demonstrating Planner coordination.
+
+---
+
+### 5.2 — Agent Reasoning Traces
+
+Every LLM call across all 9 nodes must be logged as a structured reasoning trace so the capstone evaluator can inspect what each agent decided and why.
+
+**Schema — `AgentTrace` (new DB table):**
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | UUID PK | |
+| `application_id` | UUID FK → `applications` | |
+| `agent_role` | varchar | `retriever` / `analyst` / `critic` / `planner` / `coordinator` |
+| `node_name` | varchar | e.g. `credit_assessment` |
+| `prompt_rendered` | text | Full Jinja2-rendered prompt sent to Claude |
+| `raw_llm_response` | text | Full text response from Claude before parsing |
+| `parsed_output` | jsonb | The structured JSON the node extracted |
+| `rag_chunks_used` | jsonb | For Retriever: which policy chunks were retrieved and their similarity scores |
+| `duration_ms` | integer | Wall-clock time for the Claude API call |
+| `model` | varchar | `claude-sonnet-4-6` |
+| `input_tokens` | integer | From Claude response usage |
+| `output_tokens` | integer | From Claude response usage |
+| `created_at` | timestamptz | |
+
+**Implementation steps:**
+1. Create Alembic migration for `agent_traces` table.
+2. Add `trace_logger.py` to `agent-service/services/` — a thin async helper that writes an `AgentTrace` row after every successful or failed LLM call.
+3. Call `await trace_logger.log(...)` in every agent node, passing the rendered prompt, raw response, parsed output, and token counts from `response.usage`.
+4. For the Retriever (`compliance`): also log `rag_chunks_used` — the top-k chunks returned by pgvector with their cosine similarity scores.
+5. **New API endpoint** `GET /api/v1/applications/{id}/traces` in `backend-api/routers/applications.py` — returns all `AgentTrace` rows for an application, ordered by `created_at`. Used by the demo dashboard (§5.4).
+
+---
+
+### 5.3 — Quantitative + Qualitative Evaluation
+
+Both types of evaluation must be implemented and surfaced in the demo dashboard.
+
+**Quantitative metrics** (already partially tracked via `/analytics` endpoints — extend them):
+
+| Metric | Source | Endpoint |
+|---|---|---|
+| Overall approval rate | `applications` table | `/analytics/summary` (existing) |
+| Per-stage rejection rate | `audit_log` | `/analytics/agents` (existing) |
+| Mean credit score (approved vs rejected) | `agent_traces.parsed_output` | `/analytics/evaluation` (new) |
+| Mean fraud risk score (approved vs rejected) | `agent_traces.parsed_output` | `/analytics/evaluation` (new) |
+| Mean pipeline duration (lead_capture → disbursement) | `agent_traces.created_at` diff | `/analytics/evaluation` (new) |
+| HITL intervention rate (% of apps that needed RM) | `applications` where `hitl_required=true` | `/analytics/evaluation` (new) |
+| Disbursement success rate | `applications` where `disbursement_status=success` | `/analytics/evaluation` (new) |
+| LLM token usage per node (avg) | `agent_traces` aggregated by node | `/analytics/evaluation` (new) |
+
+**Qualitative metrics** (from `agent_traces`):
+
+| Metric | How to compute |
+|---|---|
+| Reasoning coherence score | Prompt Claude (offline / batch job) to rate each `raw_llm_response` 1–5 for logical consistency |
+| Critic false-positive rate | % of `lead_qualification` rejections that had credit_score > 650 (contradiction flagged) |
+| Planner term alignment | Check that `sanction_amount ≤ suggested_loan_amount` — misalignment logged as a quality flag |
+| RAG retrieval relevance | For each Retriever call, log similarity scores; alert if top chunk similarity < 0.75 |
+
+**Implementation steps:**
+1. Add `GET /api/v1/analytics/evaluation` endpoint returning all quantitative metrics above.
+2. Add `GET /api/v1/analytics/quality-flags` endpoint that scans recent traces and returns qualitative flags (contradiction, misalignment, low RAG similarity).
+3. Add a `POST /api/v1/analytics/run-coherence-check` endpoint that batches the last N `raw_llm_response` texts to Claude for reasoning quality scoring, stores results back in a `coherence_score` column on `agent_traces`.
+
+---
+
+### 5.4 — Demo Dashboard + Evaluation Report
+
+**Demo dashboard** — new `frontend/src/pages/EvaluationDashboard.tsx` page, accessible at `/eval` (RM only):
+
+| Section | Content |
+|---|---|
+| **Agent Inventory** | Table listing all 4 named roles, their mapped nodes, call count, avg token usage, avg duration |
+| **Quantitative Scorecard** | Grid of metric cards (approval rate, HITL rate, disbursement success, avg credit score, avg fraud score, avg pipeline duration) from `/analytics/evaluation` |
+| **Qualitative Flags** | List of recent quality flags from `/analytics/quality-flags` — contradictions, misalignments, low RAG similarity — each linkable to the trace |
+| **Reasoning Trace Explorer** | Search by application ID → accordion showing each node's trace: prompt sent, raw LLM response, parsed output, token counts, duration |
+| **Per-Node Performance** | Recharts BarChart — avg duration + avg tokens per node |
+| **RAG Retrieval Quality** | For compliance node: histogram of top-chunk similarity scores; alert if median < 0.75 |
+
+**Wire into nav:** Add "Eval" nav item (BarChart4 icon) in `App.tsx` — visible to RM role only (guarded after Phase 2 Auth0).
+
+**Evaluation Report** — `EVALUATION.md` at repo root:
+
+Sections to include:
+1. **Agent Architecture** — diagram (ASCII or Mermaid) showing the 4 roles and their dependencies in the 9-node graph
+2. **Reasoning Trace Sample** — copy 2–3 real trace records (one per role) with prompt excerpt, LLM response excerpt, parsed output
+3. **Quantitative Results** — table of all metrics from `/analytics/evaluation` populated with real run data
+4. **Qualitative Analysis** — discussion of coherence scores, any contradictions found, RAG retrieval quality
+5. **Limitations & Future Work** — what stub nodes don't cover, how the Retriever could be extended
+
+---
+
 ## Summary
 
 | Phase | Status | Priority |
@@ -125,3 +241,15 @@ Scaffolded but entirely unwired. All work is in `notification-service/`.
 | Phase 2 — Auth (Auth0) | Not started | **High** — nothing is secured without this |
 | Phase 3 — Notifications | Not started | Medium — user-facing feature |
 | Phase 4 — Hardening | Not started | Low–Medium — production readiness |
+| Phase 5 — Capstone Excellence | Not started | **High** — required for evaluation |
+
+### Phase 5 dependency order
+
+```
+5.1 Agent roles defined
+  └─► 5.2 Trace logging (needs AGENT_ROLE constants + AgentTrace table)
+        └─► 5.3 Evaluation endpoints (query agent_traces)
+              └─► 5.4 Demo dashboard + EVALUATION.md (consumes all above)
+```
+
+Phase 4 RAG item (pgvector + compliance) is a **prerequisite for 5.1** (the Retriever role). Implement it before the rest of Phase 5.
