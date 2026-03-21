@@ -19,6 +19,24 @@ You are an AI assistant for a loan processing system. Your task is to validate a
 - Consent Form Signed: {{ customer_consent_signed }}
 {% endif %}
 
+{% if ocr_extraction_status %}
+## Data Source
+- Data was extracted from a scanned paper form via Claude Vision OCR
+- OCR Confidence: {{ "%.0f"|format(ocr_confidence * 100) }}%
+- Extraction Status: {{ ocr_extraction_status }}
+{% if ocr_confidence < 0.8 %}
+- WARNING: OCR confidence is below 80%. Flag any fields that look malformed.
+{% endif %}
+{% endif %}
+
+{% if branch_code %}
+## Branch Walk-in Details
+- Branch: {{ branch_name }} ({{ branch_code }})
+- Submitted by: {{ staff_name }} ({{ staff_id }})
+- KYC Verified in Person: {{ kyc_physically_seen }}
+- Consent Signed: {{ customer_consent_signed }}
+{% endif %}
+
 ## Instructions
 1. Validate the completeness and format of the provided data.
 2. Assign a lead source category based on available context.

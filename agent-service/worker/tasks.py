@@ -48,6 +48,12 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
         "staff_name":               initial_data.get("staff_name"),
         "kyc_physically_seen":      initial_data.get("kyc_physically_seen", False),
         "customer_consent_signed":  initial_data.get("customer_consent_signed", False),
+
+        "scanned_document_path":   initial_data.get("scanned_document_path"),
+        "scanned_document_mime":   initial_data.get("scanned_document_mime"),
+        "ocr_extraction_status":   None,
+        "ocr_extracted_fields":    None,
+        "ocr_confidence":          None,
     }
 
     config = {"configurable": {"thread_id": application_id}}

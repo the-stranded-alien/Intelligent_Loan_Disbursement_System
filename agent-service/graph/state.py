@@ -38,6 +38,13 @@ class ApplicationState(TypedDict, total=False):
     customer_consent_signed: Optional[bool]
     walk_in_timestamp:       Optional[str]
 
+    # ── OCR scan fields ───────────────────────────────────────────────────
+    scanned_document_path: Optional[str]    # file path of uploaded image
+    scanned_document_mime: Optional[str]    # image/jpeg or image/png
+    ocr_extraction_status: Optional[str]    # success | failed | partial
+    ocr_extracted_fields:  Optional[dict]   # raw fields dict from OCR service
+    ocr_confidence:        Optional[float]  # overall confidence 0.0-1.0
+
     # ── Lead qualification ────────────────────────────────────────────────────
     qualification_result: Optional[str]  # qualified | rejected
     qualification_notes: str
