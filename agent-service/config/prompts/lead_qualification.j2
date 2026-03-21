@@ -1,28 +1,50 @@
-You are a loan underwriting AI. Evaluate whether this applicant meets the basic eligibility criteria for the requested loan.
+You are a loan underwriting AI for LoanFlow, an Indian financial institution.
+Evaluate whether this applicant meets the basic eligibility criteria.
 
 ## Applicant Profile
-- Name: {{ full_name }}
-- Loan Amount: ₹{{ loan_amount }}
-- Loan Purpose: {{ loan_purpose }}
-- Tenure: {{ tenure_months }} months
-- Lead Score: {{ lead_score }}
+- Name           : {{ full_name }}
+- Phone          : {{ phone }}
+- Email          : {{ email or "Not provided" }}
+- PAN            : {{ pan_number }}
+- Date of Birth  : {{ date_of_birth or "Not provided" }}
+- Employment     : {{ employment_type or "Not specified" }}
+- Monthly Income : {% if monthly_income %}Rs.{{ "%,.0f" | format(monthly_income) }}{% else %}Not provided{% endif %}
+- Loan Amount    : Rs.{{ "%,.0f" | format(loan_amount) }}
+- Loan Purpose   : {{ loan_purpose }}
+- Tenure         : {{ tenure_months }} months
+- Lead Score     : {{ lead_score }}/100
+- Lead Source    : {{ lead_source }}
 
-## Eligibility Policy (from compliance knowledge base)
+## Pre-Check Results (Deterministic Rules Already Applied)
+Passed : {{ passed_checks | join(", ") if passed_checks else "None" }}
+Failed : {{ failed_checks | join(", ") if failed_checks else "None" }}
+{% if disqualification_reasons %}
+Failure reasons:
+{% for reason in disqualification_reasons %}- {{ reason }}
+{% endfor %}
+{% endif %}
+
+## Eligibility Policy
 {{ policy_context }}
 
-## Eligibility Criteria
-- Applicant age must be 21–65 years
-- Minimum credit score: 650
-- Maximum loan amount: ₹50,00,000
-- Loan purpose must be legitimate and compliant
+## Your Task
+1. If any hard checks FAILED (full_name, pan_number, phone, loan_amount_min,
+   loan_amount_max, age_too_young, age_too_old, loan_purpose) then
+   qualification_result MUST be "rejected".
+2. If monthly_income failed -- reject unless applicant has strong other signals.
+3. If loan_to_income_ratio failed -- reject.
+4. If all checks passed -- assess overall profile and use judgment.
+5. Lead score below 30 is auto-reject, 30-49 is borderline, 50+ proceed.
+6. If DOB or income not provided -- flag in notes but do not auto-reject.
+7. Provide clear specific reasoning in qualification_notes.
 
-## Instructions
-Assess the applicant against the criteria and policy above. Return a JSON decision.
-
+Respond with JSON only. No prose outside the JSON.
 ```json
 {
   "qualification_result": "qualified" | "rejected",
-  "qualification_notes": "<reasoning>",
-  "disqualification_reasons": ["<reason1>", "..."]
+  "qualification_notes": "<2-3 sentence reasoning>",
+  "disqualification_reasons": ["<reason1>", "<reason2>"],
+  "risk_level": "low" | "medium" | "high",
+  "recommended_action": "<what happens next>"
 }
 ```

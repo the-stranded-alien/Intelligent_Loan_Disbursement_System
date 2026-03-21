@@ -118,6 +118,8 @@ services:
       context: ./agent-service
       dockerfile: Dockerfile
     container_name: loan-agent-service
+    volumes:
+    - uploads:/app/uploads
     restart: unless-stopped
     environment:
       <<: *common-env
@@ -157,6 +159,8 @@ services:
       context: ./agent-service
       dockerfile: Dockerfile
     container_name: loan-agent-worker
+    volumes:
+    - uploads:/app/uploads
     restart: unless-stopped
     command: celery -A worker.celery_app worker --loglevel=info --concurrency=4 -Q agent
     environment:

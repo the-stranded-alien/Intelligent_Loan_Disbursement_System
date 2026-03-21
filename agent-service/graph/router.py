@@ -3,8 +3,10 @@ from graph.state import ApplicationState
 
 def route_after_qualification(state: ApplicationState) -> str:
     """Route after lead_qualification: continue to identity verification or reject."""
-    # TODO: return "continue" if state["qualification_result"] == "qualified" else "reject"
-    return "continue"
+    result = state.get("qualification_result")
+    if result == "qualified":
+        return "continue"
+    return "reject"
 
 
 def route_after_fraud(state: ApplicationState) -> str:

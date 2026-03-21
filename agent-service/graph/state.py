@@ -29,9 +29,28 @@ class ApplicationState(TypedDict, total=False):
     lead_source: str
     lead_score: Optional[float]
 
+    # ── Branch walk-in fields  ─────────────────────────
+    branch_code:             Optional[str]
+    branch_name:             Optional[str]
+    staff_id:                Optional[str]
+    staff_name:              Optional[str]
+    kyc_physically_seen:     Optional[bool]
+    customer_consent_signed: Optional[bool]
+    walk_in_timestamp:       Optional[str]
+
+    # ── OCR scan fields ───────────────────────────────────────────────────
+    scanned_document_path: Optional[str]    # file path of uploaded image
+    scanned_document_mime: Optional[str]    # image/jpeg or image/png
+    ocr_extraction_status: Optional[str]    # success | failed | partial
+    ocr_extracted_fields:  Optional[dict]   # raw fields dict from OCR service
+    ocr_confidence:        Optional[float]  # overall confidence 0.0-1.0
+
     # ── Lead qualification ────────────────────────────────────────────────────
     qualification_result: Optional[str]  # qualified | rejected
     qualification_notes: str
+    disqualification_reasons: list[str]
+    employment_type:          Optional[str]
+    monthly_income:           Optional[float]
 
     # ── Identity verification ─────────────────────────────────────────────────
     identity_verified: bool
