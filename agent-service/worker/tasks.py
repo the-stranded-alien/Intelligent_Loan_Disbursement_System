@@ -41,6 +41,10 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
         "messages": [],
         "disbursement_attempts": 0,
 
+        "date_of_birth":   initial_data.get("date_of_birth"),    # ADD
+        "employment_type": initial_data.get("employment_type"),  # ADD
+        "monthly_income":  float(initial_data.get("monthly_income") or 0) or None,
+
         "lead_source":              initial_data.get("lead_source", "web"),
         "branch_code":              initial_data.get("branch_code"),
         "branch_name":              initial_data.get("branch_name"),

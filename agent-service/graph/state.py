@@ -48,6 +48,9 @@ class ApplicationState(TypedDict, total=False):
     # ── Lead qualification ────────────────────────────────────────────────────
     qualification_result: Optional[str]  # qualified | rejected
     qualification_notes: str
+    disqualification_reasons: list
+    employment_type:          Optional[str]
+    monthly_income:           Optional[float]
 
     # ── Identity verification ─────────────────────────────────────────────────
     identity_verified: bool

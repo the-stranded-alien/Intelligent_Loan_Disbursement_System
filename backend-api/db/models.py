@@ -17,6 +17,9 @@ class Application(Base):
     phone = Column(String, nullable=False)
     email = Column(String, nullable=False)
     pan_number = Column(String, nullable=False)
+    date_of_birth = Column(String,  nullable=True)
+    employment_type = Column(String,  nullable=True)
+    monthly_income = Column(Float,   nullable=True)
     # Loan info
     loan_amount = Column(Float, nullable=False)
     loan_purpose = Column(String)

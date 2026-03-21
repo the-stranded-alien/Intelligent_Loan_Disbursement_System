@@ -19,6 +19,7 @@ class ApplicationCreate(BaseModel):
     loan_purpose: str | None = None
     tenure_months: int | None = None
 
+
 @router.post("/")
 async def create_application(payload: ApplicationCreate):
     db = SessionLocal()
@@ -36,6 +37,9 @@ async def create_application(payload: ApplicationCreate):
             current_stage="lead_capture",
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
+            date_of_birth=payload.date_of_birth,       # ADD
+            employment_type=payload.employment_type,   # ADD
+            monthly_income=payload.monthly_income,     # ADD
         )
         db.add(app)
         db.commit()
@@ -54,13 +58,15 @@ async def create_application(payload: ApplicationCreate):
                 "loan_purpose": app.loan_purpose or "",
                 "tenure_months": app.tenure_months or 12,
                 "created_at": str(app.created_at),
+                "date_of_birth":   payload.date_of_birth,      # ADD
+                "employment_type": payload.employment_type,    # ADD
+                "monthly_income":  payload.monthly_income,     # ADD
             }
         )
 
         return {"application_id": app.id, "status": app.status, "stage": app.current_stage}
     finally:
         db.close()
-    
 
 
 @router.get("/")
@@ -83,7 +89,8 @@ async def list_applications(
                 | Application.pan_number.ilike(term)
             )
         total = q.count()
-        apps = q.order_by(Application.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        apps = q.order_by(Application.created_at.desc()).offset(
+            (page - 1) * page_size).limit(page_size).all()
         return {
             "total": total,
             "page": page,
@@ -107,9 +114,11 @@ async def list_applications(
 async def get_application_status(application_id: str):
     db = SessionLocal()
     try:
-        app = db.query(Application).filter(Application.id == application_id).first()
+        app = db.query(Application).filter(
+            Application.id == application_id).first()
         if not app:
-            raise HTTPException(status_code=404, detail="Application not found")
+            raise HTTPException(
+                status_code=404, detail="Application not found")
         return {
             "application_id": app.id,
             "full_name": app.full_name,
@@ -129,9 +138,11 @@ async def get_application_status(application_id: str):
 async def get_application_events(application_id: str):
     db = SessionLocal()
     try:
-        app = db.query(Application).filter(Application.id == application_id).first()
+        app = db.query(Application).filter(
+            Application.id == application_id).first()
         if not app:
-            raise HTTPException(status_code=404, detail="Application not found")
+            raise HTTPException(
+                status_code=404, detail="Application not found")
         logs = (
             db.query(AuditLog)
             .filter(AuditLog.application_id == application_id)
@@ -139,7 +150,8 @@ async def get_application_events(application_id: str):
             .all()
         )
         return [
-            {"event": l.event_type, "actor": l.actor, "payload": l.payload, "at": str(l.created_at)}
+            {"event": l.event_type, "actor": l.actor,
+                "payload": l.payload, "at": str(l.created_at)}
             for l in logs
         ]
     finally:
@@ -150,9 +162,11 @@ async def get_application_events(application_id: str):
 async def get_application(application_id: str):
     db = SessionLocal()
     try:
-        app = db.query(Application).filter(Application.id == application_id).first()
+        app = db.query(Application).filter(
+            Application.id == application_id).first()
         if not app:
-            raise HTTPException(status_code=404, detail="Application not found")
+            raise HTTPException(
+                status_code=404, detail="Application not found")
         return {
             "id": app.id, "full_name": app.full_name, "phone": app.phone,
             "email": app.email, "pan_number": app.pan_number,
