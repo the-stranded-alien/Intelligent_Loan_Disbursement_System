@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Branch Walk-in Loan Application</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: sans-serif;
+      background: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+    .page { width: 100%; max-width: 560px; }
+
+    /* Header */
+    .header { margin-bottom: 24px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .header h1 { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .header p  { font-size: 13px; color: #64748b; }
+
+    /* Card */
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 28px;
+    }
+
+    /* Section labels */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin: 24px 0 14px;
+    }
+    .section-label:first-child { margin-top: 0; }
+
+    /* Divider */
+    .divider { border: none; border-top: 1px solid #f1f5f9; margin: 20px 0; }
+
+    /* Grid */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .col-span-2 { grid-column: span 2; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+
+    label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #475569;
+    }
+    label .required { color: #ef4444; margin-left: 2px; }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="number"],
+    input[type="tel"],
+    select {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #0f172a;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    input.readonly {
+      background: #f8fafc;
+      color: #94a3b8;
+      cursor: default;
+    }
+    input::placeholder { color: #cbd5e1; }
+
+    .hint { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+    .auto-note { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+
+    /* Tenure pills */
+    .tenure-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+    .tenure-pill {
+      padding: 6px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #64748b;
+      cursor: pointer;
+      background: #fff;
+      transition: all 0.15s;
+    }
+    .tenure-pill:hover { border-color: #6366f1; color: #6366f1; }
+    .tenure-pill.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+    .tenure-pill input[type="radio"] { display: none; }
+
+    /* Checkboxes */
+    .verify-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .verify-row { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+    .verify-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      accent-color: #6366f1;
+      cursor: pointer;
+    }
+    .verify-text strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+    .verify-text span { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+
+    /* Submit */
+    .btn-submit {
+      width: 100%;
+      height: 44px;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 24px;
+      transition: background 0.15s;
+    }
+    .btn-submit:hover { background: #4338ca; }
+    .btn-submit:active { background: #3730a3; }
+
+    /* Payload preview */
+    .payload-section {
+      margin-top: 28px;
+      border: 1px dashed #e2e8f0;
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .payload-section h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin-bottom: 10px;
+    }
+    pre {
+      font-size: 12px;
+      color: #334155;
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 14px;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="badge">Branch Portal</div>
+    <h1>Walk-in Loan Application</h1>
+    <p>Fill in the customer details and your branch information.</p>
+  </div>
+
+  <div class="card">
+    <form id="branchForm" onsubmit="handleSubmit(event)">
+
+      <!-- SECTION 1: Customer Details -->
+      <p class="section-label">Customer Details</p>
+      <div class="grid-2">
+
+        <div class="field col-span-2">
+          <label>Full Name <span class="required">*</span></label>
+          <input type="text" id="full_name" name="full_name" placeholder="Ravi Kumar" required />
+        </div>
+
+        <div class="field">
+          <label>Email Address <span class="required">*</span></label>
+          <input type="email" id="email" name="email" placeholder="ravi@example.com" required />
+        </div>
+
+        <div class="field">
+          <label>Mobile Number <span class="required">*</span></label>
+          <input type="tel" id="phone" name="phone" placeholder="9876543210"
+            maxlength="10" pattern="[6-9][0-9]{9}"
+            title="10-digit Indian mobile number" required />
+        </div>
+
+        <div class="field col-span-2">
+          <label>PAN Number <span class="required">*</span></label>
+          <input type="text" id="pan_number" name="pan_number" placeholder="ABCDE1234F"
+            maxlength="10" pattern="[A-Z]{5}[0-9]{4}[A-Z]{1}"
+            title="Valid PAN e.g. ABCDE1234F"
+            style="text-transform:uppercase"
+            oninput="this.value=this.value.toUpperCase()" required />
+        </div>
+
+      </div>
+
+      <hr class="divider" />
+
+      <!-- SECTION 2: Loan Details -->
+      <p class="section-label">Loan Details</p>
+      <div class="grid-2">
+
+        <div class="field col-span-2">
+          <label>Loan Amount (Rs.) <span class="required">*</span></label>
+          <input type="number" id="loan_amount" name="loan_amount"
+            placeholder="500000" min="10000" max="10000000" required />
+          <span class="hint">Min Rs.10,000 - Max Rs.1 Crore</span>
+        </div>
+
+        <div class="field col-span-2">
+          <label>Loan Purpose <span class="required">*</span></label>
+          <select id="loan_purpose" name="loan_purpose" required>
+            <option value="">Select purpose...</option>
+            <option value="Home Renovation">Home Renovation</option>
+            <option value="Education">Education</option>
+            <option value="Medical">Medical</option>
+            <option value="Business">Business</option>
+            <option value="Vehicle">Vehicle</option>
+            <option value="Wedding">Wedding</option>
+            <option value="Travel">Travel</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="field col-span-2">
+          <label>Tenure <span class="required">*</span></label>
+          <div class="tenure-group">
+            <label class="tenure-pill"><input type="radio" name="tenure_months" value="6" /> 6m</label>
+            <label class="tenure-pill"><input type="radio" name="tenure_months" value="12" /> 12m</label>
+            <label class="tenure-pill"><input type="radio" name="tenure_months" value="18" /> 18m</label>
+            <label class="tenure-pill active"><input type="radio" name="tenure_months" value="24" checked /> 24m</label>
+            <label class="tenure-pill"><input type="radio" name="tenure_months" value="36" /> 36m</label>
+            <label class="tenure-pill"><input type="radio" name="tenure_months" value="48" /> 48m</label>
+            <label class="tenure-pill"><input type="radio" name="tenure_months" value="60" /> 60m</label>
+            <label class="tenure-pill"><input type="radio" name="tenure_months" value="84" /> 84m</label>
+          </div>
+        </div>
+
+      </div>
+
+      <hr class="divider" />
+
+      <!-- SECTION 3: Branch Details -->
+      <p class="section-label">Branch Details</p>
+      <div class="grid-2">
+
+        <div class="field col-span-2">
+          <label>Branch <span class="required">*</span></label>
+          <select id="branch_code" name="branch_code" onchange="onBranchChange(this.value)" required>
+            <option value="">Select branch...</option>
+            <option value="MUM-001">Andheri West Branch (MUM-001)</option>
+            <option value="MUM-002">Bandra Branch (MUM-002)</option>
+            <option value="MUM-003">Dadar Branch (MUM-003)</option>
+            <option value="DEL-001">Connaught Place Branch (DEL-001)</option>
+            <option value="DEL-002">Lajpat Nagar Branch (DEL-002)</option>
+            <option value="BLR-001">Koramangala Branch (BLR-001)</option>
+            <option value="BLR-002">Indiranagar Branch (BLR-002)</option>
+            <option value="HYD-001">Hitech City Branch (HYD-001)</option>
+            <option value="CHN-001">Anna Nagar Branch (CHN-001)</option>
+            <option value="PUN-001">Koregaon Park Branch (PUN-001)</option>
+          </select>
+        </div>
+
+        <div class="field col-span-2">
+          <label>Branch Name</label>
+          <input type="text" id="branch_name" name="branch_name"
+            class="readonly" placeholder="Auto-filled on branch selection" readonly />
+          <span class="auto-note">Auto-filled when branch is selected above</span>
+        </div>
+
+        <div class="field">
+          <label>Your Staff ID <span class="required">*</span></label>
+          <input type="text" id="staff_id" name="staff_id" placeholder="RM-001" required />
+        </div>
+
+        <div class="field">
+          <label>Your Name <span class="required">*</span></label>
+          <input type="text" id="staff_name" name="staff_name" placeholder="Sahil Gupta" required />
+        </div>
+
+        <input type="hidden" id="walk_in_timestamp" name="walk_in_timestamp" />
+
+      </div>
+
+      <hr class="divider" />
+
+      <!-- SECTION 4: Branch Verification -->
+      <p class="section-label">Branch Verification</p>
+      <div class="verify-box">
+
+        <label class="verify-row">
+          <input type="checkbox" id="kyc_physically_seen" name="kyc_physically_seen" />
+          <div class="verify-text">
+            <strong>KYC documents verified in person</strong>
+            <span>I have physically seen and verified the customer's original documents (Aadhaar, PAN, address proof)</span>
+          </div>
+        </label>
+
+        <label class="verify-row">
+          <input type="checkbox" id="customer_consent_signed" name="customer_consent_signed" />
+          <div class="verify-text">
+            <strong>Customer consent form signed</strong>
+            <span>The customer has signed the physical consent form for data processing and credit inquiry</span>
+          </div>
+        </label>
+
+      </div>
+
+      <button type="submit" class="btn-submit">Submit Application</button>
+
+    </form>
+  </div>
+
+  <!-- API Payload Reference -->
+  <div class="payload-section">
+    <h3>API Payload Reference -- POST /api/v1/branch/applications</h3>
+    <pre id="payloadPreview"></pre>
+  </div>
+
+</div>
+
+<script>
+  var BRANCHES = {
+    'MUM-001': 'Andheri West Branch',
+    'MUM-002': 'Bandra Branch',
+    'MUM-003': 'Dadar Branch',
+    'DEL-001': 'Connaught Place Branch',
+    'DEL-002': 'Lajpat Nagar Branch',
+    'BLR-001': 'Koramangala Branch',
+    'BLR-002': 'Indiranagar Branch',
+    'HYD-001': 'Hitech City Branch',
+    'CHN-001': 'Anna Nagar Branch',
+    'PUN-001': 'Koregaon Park Branch'
+  };
+
+  function onBranchChange(code) {
+    document.getElementById('branch_name').value = BRANCHES[code] || '';
+    updatePayloadPreview();
+  }
+
+  document.querySelectorAll('.tenure-pill input[type="radio"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      document.querySelectorAll('.tenure-pill').forEach(function(p) { p.classList.remove('active'); });
+      this.closest('.tenure-pill').classList.add('active');
+      updatePayloadPreview();
+    });
+  });
+
+  function getVal(id) {
+    return document.getElementById(id) ? document.getElementById(id).value : '';
+  }
+
+  function updatePayloadPreview() {
+    var tenure = document.querySelector('input[name="tenure_months"]:checked');
+    var payload = {
+      full_name:               getVal('full_name')    || 'Ravi Kumar',
+      email:                   getVal('email')        || 'ravi@example.com',
+      phone:                   getVal('phone')        || '9876543210',
+      pan_number:              getVal('pan_number')   || 'ABCDE1234F',
+      loan_amount:             parseFloat(getVal('loan_amount')) || 500000,
+      loan_purpose:            getVal('loan_purpose') || 'Home Renovation',
+      tenure_months:           tenure ? parseInt(tenure.value) : 24,
+      branch_code:             getVal('branch_code')  || 'MUM-001',
+      branch_name:             getVal('branch_name')  || 'Andheri West Branch',
+      staff_id:                getVal('staff_id')     || 'RM-001',
+      staff_name:              getVal('staff_name')   || 'Sahil Gupta',
+      kyc_physically_seen:     document.getElementById('kyc_physically_seen').checked,
+      customer_consent_signed: document.getElementById('customer_consent_signed').checked,
+      walk_in_timestamp:       new Date().toISOString()
+    };
+    document.getElementById('payloadPreview').textContent = JSON.stringify(payload, null, 2);
+  }
+
+  document.getElementById('branchForm').addEventListener('input', updatePayloadPreview);
+  document.getElementById('branchForm').addEventListener('change', updatePayloadPreview);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+
+    document.getElementById('walk_in_timestamp').value = new Date().toISOString();
+
+    var tenure = document.querySelector('input[name="tenure_months"]:checked');
+    if (!tenure) { alert('Please select a tenure.'); return; }
+
+    var payload = {
+      full_name:               document.getElementById('full_name').value.trim(),
+      email:                   document.getElementById('email').value.trim(),
+      phone:                   document.getElementById('phone').value.trim(),
+      pan_number:              document.getElementById('pan_number').value.trim().toUpperCase(),
+      loan_amount:             parseFloat(document.getElementById('loan_amount').value),
+      loan_purpose:            document.getElementById('loan_purpose').value,
+      tenure_months:           parseInt(tenure.value),
+      branch_code:             document.getElementById('branch_code').value,
+      branch_name:             document.getElementById('branch_name').value,
+      staff_id:                document.getElementById('staff_id').value.trim(),
+      staff_name:              document.getElementById('staff_name').value.trim(),
+      kyc_physically_seen:     document.getElementById('kyc_physically_seen').checked,
+      customer_consent_signed: document.getElementById('customer_consent_signed').checked,
+      walk_in_timestamp:       document.getElementById('walk_in_timestamp').value
+    };
+
+    console.log('Submitting:', payload);
+
+    fetch('/api/v1/branch/applications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Submission failed: ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      alert('Application submitted!\nApplication ID: ' + data.application_id);
+      document.getElementById('branchForm').reset();
+      document.querySelectorAll('.tenure-pill').forEach(function(p) { p.classList.remove('active'); });
+      updatePayloadPreview();
+    })
+    .catch(function(err) {
+      alert('Error: ' + err.message);
+    });
+  }
+
+  updatePayloadPreview();
+</script>
+</body>
+</html>
