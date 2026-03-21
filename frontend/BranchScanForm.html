@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Branch Scan Form — Way 4</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: sans-serif;
+      background: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .page { width: 100%; max-width: 560px; }
+
+    /* Header */
+    .header { margin-bottom: 24px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .header h1 { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .header p  { font-size: 13px; color: #64748b; }
+
+    /* Card */
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 28px;
+    }
+
+    /* Section labels */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin: 24px 0 14px;
+    }
+    .section-label:first-child { margin-top: 0; }
+
+    .divider { border: none; border-top: 1px solid #f1f5f9; margin: 20px 0; }
+
+    /* Grid */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .col-span-2 { grid-column: span 2; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+
+    label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #475569;
+    }
+    label .required { color: #ef4444; margin-left: 2px; }
+
+    input[type="text"],
+    input[type="email"],
+    select {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #0f172a;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    input.readonly {
+      background: #f8fafc;
+      color: #94a3b8;
+      cursor: default;
+    }
+    input::placeholder { color: #cbd5e1; }
+
+    .hint      { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+    .auto-note { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+
+    /* File upload zone */
+    .upload-zone {
+      border: 2px dashed #c7d2fe;
+      border-radius: 12px;
+      background: #eef2ff;
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .upload-zone:hover {
+      border-color: #6366f1;
+      background: #e0e7ff;
+    }
+    .upload-zone.has-file {
+      border-color: #059669;
+      background: #ecfdf5;
+    }
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .upload-icon {
+      font-size: 36px;
+      margin-bottom: 10px;
+      display: block;
+    }
+    .upload-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #4338ca;
+      margin-bottom: 4px;
+    }
+    .upload-zone.has-file .upload-title { color: #059669; }
+    .upload-subtitle {
+      font-size: 12px;
+      color: #6366f1;
+    }
+    .upload-zone.has-file .upload-subtitle { color: #059669; }
+    .file-types {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
+
+    /* Preview */
+    .preview-box {
+      margin-top: 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+    }
+    .preview-box.visible { display: block; }
+    .preview-box img {
+      width: 100%;
+      max-height: 300px;
+      object-fit: contain;
+      background: #f8fafc;
+    }
+    .preview-info {
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .preview-name { font-size: 12px; font-weight: 500; color: #334155; }
+    .preview-size { font-size: 11px; color: #94a3b8; }
+    .remove-btn {
+      font-size: 11px;
+      color: #ef4444;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 2px 6px;
+    }
+    .remove-btn:hover { text-decoration: underline; }
+
+    /* Checkboxes */
+    .verify-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .verify-row { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+    .verify-row input[type="checkbox"] {
+      width: 16px; height: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      accent-color: #6366f1;
+      cursor: pointer;
+    }
+    .verify-text strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+    .verify-text span { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+
+    /* Progress / status */
+    .status-box {
+      display: none;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+    }
+    .status-box.uploading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #eef2ff;
+      color: #4338ca;
+      border: 1px solid #c7d2fe;
+    }
+    .status-box.success {
+      display: block;
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+    .status-box.error {
+      display: block;
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid #c7d2fe;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .app-id {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      background: #d1fae5;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-top: 8px;
+      display: inline-block;
+      word-break: break-all;
+    }
+
+    /* Submit button */
+    .btn-submit {
+      width: 100%;
+      height: 44px;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 24px;
+      transition: background 0.15s;
+    }
+    .btn-submit:hover  { background: #4338ca; }
+    .btn-submit:active { background: #3730a3; }
+    .btn-submit:disabled {
+      background: #a5b4fc;
+      cursor: not-allowed;
+    }
+
+    /* API reference */
+    .api-section {
+      margin-top: 28px;
+      border: 1px dashed #e2e8f0;
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .api-section h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin-bottom: 10px;
+    }
+    pre {
+      font-size: 12px;
+      color: #334155;
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 14px;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+    .comment { color: #94a3b8; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="badge">Branch Portal — Way 4</div>
+    <h1>Upload Scanned Loan Form</h1>
+    <p>Browse and upload a photo or scan of the customer's filled paper form.
+       AI will extract all fields automatically.</p>
+  </div>
+
+  <div class="card">
+    <form id="scanForm" onsubmit="handleSubmit(event)">
+
+      <!-- SECTION 1: Branch Details (auto-filled from login) -->
+      <p class="section-label">Branch Details</p>
+      <div class="grid-2">
+
+        <div class="field col-span-2">
+          <label>Branch <span class="required">*</span></label>
+          <select id="branch_code" name="branch_code"
+                  onchange="onBranchChange(this.value)" required>
+            <option value="">Select branch...</option>
+            <option value="MUM-001">Andheri West Branch (MUM-001)</option>
+            <option value="MUM-002">Bandra Branch (MUM-002)</option>
+            <option value="MUM-003">Dadar Branch (MUM-003)</option>
+            <option value="DEL-001">Connaught Place Branch (DEL-001)</option>
+            <option value="DEL-002">Lajpat Nagar Branch (DEL-002)</option>
+            <option value="BLR-001">Koramangala Branch (BLR-001)</option>
+            <option value="BLR-002">Indiranagar Branch (BLR-002)</option>
+            <option value="HYD-001">Hitech City Branch (HYD-001)</option>
+            <option value="CHN-001">Anna Nagar Branch (CHN-001)</option>
+            <option value="PUN-001">Koregaon Park Branch (PUN-001)</option>
+          </select>
+        </div>
+
+        <div class="field col-span-2">
+          <label>Branch Name</label>
+          <input type="text" id="branch_name" name="branch_name"
+                 class="readonly" placeholder="Auto-filled on branch selection"
+                 readonly />
+          <span class="auto-note">Auto-filled when branch is selected</span>
+        </div>
+
+        <div class="field">
+          <label>Your Staff ID <span class="required">*</span></label>
+          <input type="text" id="staff_id" name="staff_id"
+                 placeholder="RM-001" required />
+        </div>
+
+        <div class="field">
+          <label>Your Name <span class="required">*</span></label>
+          <input type="text" id="staff_name" name="staff_name"
+                 placeholder="Sahil Gupta" required />
+        </div>
+
+      </div>
+
+      <hr class="divider" />
+
+      <!-- SECTION 2: Upload Scanned Form -->
+      <p class="section-label">Scanned Form <span class="required">*</span></p>
+
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('scan_file').click()">
+        <input
+          type="file"
+          id="scan_file"
+          name="file"
+          accept="image/jpeg,image/png,image/jpg,application/pdf"
+          onchange="onFileSelected(this)"
+          onclick="event.stopPropagation()"
+        />
+        <span class="upload-icon" id="uploadIcon">📄</span>
+        <div class="upload-title" id="uploadTitle">Browse and upload scanned form</div>
+        <div class="upload-subtitle" id="uploadSubtitle">Click to select a file</div>
+        <div class="file-types">Supported: JPG, PNG, PDF</div>
+      </div>
+
+      <!-- Preview -->
+      <div class="preview-box" id="previewBox">
+        <img id="previewImg" src="" alt="Form preview" />
+        <div class="preview-info">
+          <div>
+            <div class="preview-name" id="previewName"></div>
+            <div class="preview-size" id="previewSize"></div>
+          </div>
+          <button type="button" class="remove-btn" onclick="removeFile()">
+            Remove
+          </button>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <!-- SECTION 3: Branch Verification -->
+      <p class="section-label">Branch Verification</p>
+      <div class="verify-box">
+
+        <label class="verify-row">
+          <input type="checkbox" id="kyc_physically_seen"
+                 name="kyc_physically_seen" />
+          <div class="verify-text">
+            <strong>KYC documents verified in person</strong>
+            <span>I have physically seen and verified the customer's
+              original documents (Aadhaar, PAN, address proof)</span>
+          </div>
+        </label>
+
+        <label class="verify-row">
+          <input type="checkbox" id="customer_consent_signed"
+                 name="customer_consent_signed" />
+          <div class="verify-text">
+            <strong>Customer consent form signed</strong>
+            <span>The customer has signed the physical consent form for
+              data processing and credit inquiry</span>
+          </div>
+        </label>
+
+      </div>
+
+      <!-- Status messages -->
+      <div class="status-box uploading" id="statusUploading">
+        <div class="spinner"></div>
+        <span>Uploading form and starting OCR extraction...</span>
+      </div>
+
+      <div class="status-box success" id="statusSuccess">
+        Form uploaded successfully. AI is extracting fields from the scan.
+        <br />
+        <span class="app-id" id="appIdDisplay"></span>
+        <br /><br />
+        Track the application status using the Application ID above.
+      </div>
+
+      <div class="status-box error" id="statusError">
+        <strong>Upload failed.</strong>
+        <span id="errorMessage"></span>
+      </div>
+
+      <button type="submit" class="btn-submit" id="submitBtn">
+        Upload &amp; Extract Fields
+      </button>
+
+    </form>
+  </div>
+
+  <!-- API Reference -->
+  <div class="api-section">
+    <h3>API Reference — POST /api/v1/branch/scan</h3>
+    <pre><span class="comment">// This page calls the backend using FormData (NOT JSON)
+// because we are sending a file along with the fields</span>
+
+const formData = new FormData()
+formData.append('branch_code',             'MUM-001')
+formData.append('branch_name',             'Andheri West Branch')
+formData.append('staff_id',                'RM-001')
+formData.append('staff_name',              'Sahil Gupta')
+formData.append('kyc_physically_seen',     true)
+formData.append('customer_consent_signed', false)
+formData.append('file',                    fileInput.files[0])
+
+<span class="comment">// DO NOT set Content-Type header manually
+// Browser sets it automatically with the correct multipart boundary</span>
+
+fetch('/api/v1/branch/scan', {
+  method: 'POST',
+  body: formData
+})
+.then(res => res.json())
+.then(data => {
+  console.log(data.application_id)   <span class="comment">// e.g. "a1b2c3d4-..."</span>
+  console.log(data.status)           <span class="comment">// "pending"</span>
+  console.log(data.message)          <span class="comment">// "Scan received. OCR in progress."</span>
+})</pre>
+  </div>
+
+</div>
+
+<script>
+  var BRANCHES = {
+    'MUM-001': 'Andheri West Branch',
+    'MUM-002': 'Bandra Branch',
+    'MUM-003': 'Dadar Branch',
+    'DEL-001': 'Connaught Place Branch',
+    'DEL-002': 'Lajpat Nagar Branch',
+    'BLR-001': 'Koramangala Branch',
+    'BLR-002': 'Indiranagar Branch',
+    'HYD-001': 'Hitech City Branch',
+    'CHN-001': 'Anna Nagar Branch',
+    'PUN-001': 'Koregaon Park Branch'
+  }
+
+  function onBranchChange(code) {
+    document.getElementById('branch_name').value = BRANCHES[code] || ''
+  }
+
+  function onFileSelected(input) {
+    var file = input.files[0]
+    if (!file) return
+
+    var zone      = document.getElementById('uploadZone')
+    var icon      = document.getElementById('uploadIcon')
+    var title     = document.getElementById('uploadTitle')
+    var subtitle  = document.getElementById('uploadSubtitle')
+    var preview   = document.getElementById('previewBox')
+    var previewImg = document.getElementById('previewImg')
+    var nameEl    = document.getElementById('previewName')
+    var sizeEl    = document.getElementById('previewSize')
+
+    zone.classList.add('has-file')
+    icon.textContent    = '✅'
+    title.textContent   = file.name
+    subtitle.textContent = formatSize(file.size) + ' — ready to upload'
+
+    nameEl.textContent = file.name
+    sizeEl.textContent = formatSize(file.size)
+
+    // Show image preview for image files
+    if (file.type.startsWith('image/')) {
+      var reader = new FileReader()
+      reader.onload = function(e) {
+        previewImg.src = e.target.result
+        preview.classList.add('visible')
+      }
+      reader.readAsDataURL(file)
+    } else {
+      // PDF — no preview, just show info
+      previewImg.src = ''
+      previewImg.style.display = 'none'
+      preview.classList.add('visible')
+    }
+  }
+
+  function removeFile() {
+    var input    = document.getElementById('scan_file')
+    var zone     = document.getElementById('uploadZone')
+    var icon     = document.getElementById('uploadIcon')
+    var title    = document.getElementById('uploadTitle')
+    var subtitle = document.getElementById('uploadSubtitle')
+    var preview  = document.getElementById('previewBox')
+    var previewImg = document.getElementById('previewImg')
+
+    input.value = ''
+    zone.classList.remove('has-file')
+    icon.textContent    = '📄'
+    title.textContent   = 'Browse and upload scanned form'
+    subtitle.textContent = 'Click to select a file'
+    preview.classList.remove('visible')
+    previewImg.style.display = 'block'
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024)       return bytes + ' B'
+    if (bytes < 1024*1024)  return (bytes/1024).toFixed(1) + ' KB'
+    return (bytes/(1024*1024)).toFixed(1) + ' MB'
+  }
+
+  function showStatus(type) {
+    document.getElementById('statusUploading').style.display = 'none'
+    document.getElementById('statusSuccess').style.display   = 'none'
+    document.getElementById('statusError').style.display     = 'none'
+
+    var el = document.getElementById('status' + type)
+    if (el) el.style.display = type === 'Uploading' ? 'flex' : 'block'
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+
+    var fileInput = document.getElementById('scan_file')
+    if (!fileInput.files || !fileInput.files[0]) {
+      alert('Please select a scanned form file first.')
+      return
+    }
+
+    var submitBtn = document.getElementById('submitBtn')
+    submitBtn.disabled = true
+    submitBtn.textContent = 'Uploading...'
+    showStatus('Uploading')
+
+    // Build FormData — NOT JSON
+    // File uploads must use FormData / multipart
+    var formData = new FormData()
+    formData.append('branch_code',             document.getElementById('branch_code').value)
+    formData.append('branch_name',             document.getElementById('branch_name').value)
+    formData.append('staff_id',                document.getElementById('staff_id').value.trim())
+    formData.append('staff_name',              document.getElementById('staff_name').value.trim())
+    formData.append('kyc_physically_seen',     document.getElementById('kyc_physically_seen').checked)
+    formData.append('customer_consent_signed', document.getElementById('customer_consent_signed').checked)
+    formData.append('file',                    fileInput.files[0])
+
+    // POST to backend
+    // DO NOT set Content-Type header — browser sets it automatically
+    fetch('/api/v1/branch/scan', {
+      method: 'POST',
+      body:   formData
+    })
+    .then(function(res) {
+      if (!res.ok) {
+        return res.text().then(function(t) { throw new Error(t) })
+      }
+      return res.json()
+    })
+    .then(function(data) {
+      document.getElementById('appIdDisplay').textContent = data.application_id
+      showStatus('Success')
+      submitBtn.textContent = 'Upload & Extract Fields'
+      submitBtn.disabled    = false
+    })
+    .catch(function(err) {
+      document.getElementById('errorMessage').textContent = ' ' + err.message
+      showStatus('Error')
+      submitBtn.textContent = 'Upload & Extract Fields'
+      submitBtn.disabled    = false
+    })
+  }
+</script>
+</body>
+</html>
