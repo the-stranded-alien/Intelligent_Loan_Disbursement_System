@@ -8,6 +8,9 @@ class ApplicantBase(BaseModel):
     phone: str
     email: str
     pan_number: str
+    date_of_birth:   Optional[str] = None  # ADD — DD/MM/YYYY
+    employment_type: Optional[str] = None  # ADD — salaried | self_employed
+    monthly_income:  Optional[float] = None  # ADD — monthly income in INR
 
 
 class LoanRequestBase(BaseModel):

@@ -20,16 +20,16 @@ LOANFLOW LENDING POLICY - ELIGIBILITY CRITERIA v2.1
 
 1. AGE
    - Minimum age: 21 years
-   - Maximum age: 65 years at loan maturity
+   - Maximum age: 60 years for salaried, 65 for self-employed
 
 2. INCOME THRESHOLDS
-   - Salaried applicants:      minimum monthly income Rs.30,000
-   - Self-employed applicants: minimum monthly income Rs.50,000
+   - Salaried:      minimum monthly income Rs.30,000
+   - Self-employed: minimum monthly income Rs.50,000
 
 3. LOAN AMOUNT LIMITS
-   - Minimum loan: Rs.10,000
-   - Maximum loan: Rs.50,00,000
-   - Loan amount must not exceed 10x monthly income
+   - Minimum: Rs.10,000
+   - Maximum: Rs.50,00,000
+   - Must not exceed 10x monthly income
 
 4. LOAN PURPOSE
    - Approved: Home Renovation, Education, Medical, Business,
@@ -37,15 +37,15 @@ LOANFLOW LENDING POLICY - ELIGIBILITY CRITERIA v2.1
    - Rejected: Gambling, Speculative investment, Illegal activities
 
 5. PAN VALIDATION
-   - PAN must be present and in valid format e.g. ABCDE1234F
+   - Must be present and valid format e.g. ABCDE1234F
 
-6. CONTACT INFORMATION
+6. CONTACT
    - Valid 10-digit Indian mobile number required
 
 7. LEAD SCORE
-   - Below 30: auto-reject (poor data quality)
-   - 30-49: borderline, Claude uses judgment
-   - 50+: proceed normally
+   - Below 30: auto-reject
+   - 30-49:    borderline, use judgment
+   - 50+:      proceed normally
 """
 
 
@@ -84,8 +84,8 @@ async def run_lead_qualification(state: ApplicationState) -> ApplicationState:
     Node: lead_qualification (Stage 2)
 
     Flow:
-      1. Run deterministic eligibility checks (tools)
-      2. Hard fail fields --> reject without calling Claude (saves tokens)
+      1. Run deterministic eligibility checks including age, income, PAN
+      2. Hard fail fields --> reject without calling Claude
       3. Otherwise --> call Claude for final judgment
     """
     logger.info("Lead qualification for %s", state.get("application_id"))
@@ -100,8 +100,14 @@ async def run_lead_qualification(state: ApplicationState) -> ApplicationState:
 
     # Step 2: Hard fail -- reject without calling Claude
     hard_fail_fields = [
-        "pan_number", "phone",
-        "loan_amount_min", "loan_amount_max",
+        "full_name",
+        "pan_number",
+        "phone",
+        "loan_amount_min",
+        "loan_amount_max",
+        "age_too_young",
+        "age_too_old",
+        "loan_purpose",
     ]
     hard_failed = [
         f for f in eligibility.get("failed", [])
@@ -122,7 +128,7 @@ async def run_lead_qualification(state: ApplicationState) -> ApplicationState:
             "stage_results": {
                 **state.get("stage_results", {}),
                 "lead_qualification": {
-                    "method":       "hard_fail",
+                    "method":        "hard_fail",
                     "failed_checks": eligibility["failed"],
                 },
             },
