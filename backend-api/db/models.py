@@ -26,14 +26,24 @@ class Application(Base):
     current_stage = Column(String)
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow,
+                        onupdate=datetime.utcnow)
+    # ── Branch walk-in fields ───
+    branch_code = Column(String,  nullable=True)
+    branch_name = Column(String,  nullable=True)
+    staff_id = Column(String,  nullable=True)
+    staff_name = Column(String,  nullable=True)
+    kyc_physically_seen = Column(Boolean, default=False)
+    customer_consent_signed = Column(Boolean, default=False)
+    walk_in_timestamp = Column(DateTime, nullable=True)
 
 
 class Document(Base):
     __tablename__ = "documents"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    application_id = Column(String, ForeignKey("applications.id"), nullable=False)
+    application_id = Column(String, ForeignKey(
+        "applications.id"), nullable=False)
     document_type = Column(String, nullable=False)
     storage_path = Column(String, nullable=False)
     ocr_result = Column(JSON)
@@ -45,7 +55,8 @@ class RMReview(Base):
     __tablename__ = "rm_reviews"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    application_id = Column(String, ForeignKey("applications.id"), nullable=False)
+    application_id = Column(String, ForeignKey(
+        "applications.id"), nullable=False)
     rm_id = Column(String, nullable=False)
     decision = Column(String, nullable=False)
     notes = Column(Text)

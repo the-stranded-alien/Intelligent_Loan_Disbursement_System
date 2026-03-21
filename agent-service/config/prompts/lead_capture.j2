@@ -9,14 +9,27 @@ You are an AI assistant for a loan processing system. Your task is to validate a
 - Loan Purpose: {{ loan_purpose }}
 - Tenure: {{ tenure_months }} months
 
+## Lead Source
+- Channel: {{ lead_source }}
+{% if branch_code %}
+- Branch Code: {{ branch_code }}
+- Branch Name: {{ branch_name }}
+- Submitted By: {{ staff_name }} ({{ staff_id }})
+- KYC Verified In Person: {{ kyc_physically_seen }}
+- Consent Form Signed: {{ customer_consent_signed }}
+{% endif %}
+
 ## Instructions
 1. Validate the completeness and format of the provided data.
 2. Assign a lead source category based on available context.
-3. Compute an initial lead score from 0–100 based on data quality and loan profile.
+3. Compute an initial lead score from 0–100.
+   - If lead_source is branch_walkin, start with a base score of 65+
+     because staff verified the customer in person.
+   - If kyc_physically_seen is true, add 10 more points.
+   - If customer_consent_signed is true, add 5 more points.
 4. Identify any data quality issues.
 
 Respond with a JSON object only. No prose outside the JSON.
-
 ```json
 {
   "lead_score": <number 0-100>,

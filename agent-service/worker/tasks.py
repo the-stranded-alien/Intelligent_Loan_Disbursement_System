@@ -40,6 +40,14 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
         "pipeline_errors": [],
         "messages": [],
         "disbursement_attempts": 0,
+
+        "lead_source":              initial_data.get("lead_source", "web"),
+        "branch_code":              initial_data.get("branch_code"),
+        "branch_name":              initial_data.get("branch_name"),
+        "staff_id":                 initial_data.get("staff_id"),
+        "staff_name":               initial_data.get("staff_name"),
+        "kyc_physically_seen":      initial_data.get("kyc_physically_seen", False),
+        "customer_consent_signed":  initial_data.get("customer_consent_signed", False),
     }
 
     config = {"configurable": {"thread_id": application_id}}
@@ -66,7 +74,8 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
                     "stage_results": result.get("stage_results", {}),
                 },
             )
-            logger.info("Pipeline paused for HITL review: %s (₹%s)", application_id, loan_amount)
+            logger.info("Pipeline paused for HITL review: %s (₹%s)",
+                        application_id, loan_amount)
             return result
 
         # Small loan — auto-resume through sanction_processing → disbursement.
@@ -92,7 +101,8 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
                 },
             )
 
-        logger.info("Pipeline task done for %s at stage %s", application_id, result.get("current_stage"))
+        logger.info("Pipeline task done for %s at stage %s",
+                    application_id, result.get("current_stage"))
         return {"application_id": application_id, "stage": result.get("current_stage")}
     except Exception as exc:
         logger.error("Pipeline error for %s: %s", application_id, exc)
