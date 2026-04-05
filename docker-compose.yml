@@ -121,7 +121,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      HITL_THRESHOLD: ${HITL_THRESHOLD:-1000000}
+      HITL_THRESHOLD: ${HITL_THRESHOLD:-200000}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
       RAG_COLLECTION_NAME: ${RAG_COLLECTION_NAME:-compliance_policies}
@@ -161,7 +161,7 @@ services:
     command: celery -A worker.celery_app worker --loglevel=info --concurrency=4 -Q agent
     environment:
       <<: *common-env
-      HITL_THRESHOLD: ${HITL_THRESHOLD:-1000000}
+      HITL_THRESHOLD: ${HITL_THRESHOLD:-200000}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       BACKEND_API_URL: ${BACKEND_API_URL:-http://backend-api:8000}
       NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:8002}
