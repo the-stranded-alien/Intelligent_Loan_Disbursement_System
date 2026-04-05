@@ -17,6 +17,12 @@ class Application(Base):
     phone = Column(String, nullable=False)
     email = Column(String, nullable=False)
     pan_number = Column(String, nullable=False)
+    date_of_birth = Column(String)                    # YYYY-MM-DD
+    employment_type = Column(String, default="salaried")  # salaried | self_employed | business
+    monthly_income = Column(Float, default=0.0)
+    existing_emi_amount = Column(Float, default=0.0)
+    bank_account_number = Column(String)
+    ifsc_code = Column(String)
     # Loan info
     loan_amount = Column(Float, nullable=False)
     loan_purpose = Column(String)

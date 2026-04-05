@@ -1,23 +1,97 @@
+import json
+import logging
+import re
+from pathlib import Path
+
+import anthropic
+from jinja2 import Template
+
 from graph.state import ApplicationState
+from config.settings import settings
 from services.event_publisher import event_publisher
+
+logger = logging.getLogger(__name__)
+
+AGENT_ROLE = "analyst"  # Analyses financial documents for income verification
+
+_PROMPT_PATH = Path(__file__).parent.parent.parent / "config" / "prompts" / "lead_qualification.j2"
+
+
+def _render_prompt(state: ApplicationState) -> str:
+    template = Template(_PROMPT_PATH.read_text())
+    return template.render(
+        full_name=state.get("full_name", ""),
+        employment_type=state.get("employment_type", "salaried"),
+        monthly_income=state.get("monthly_income", 0),
+        existing_emi_amount=state.get("existing_emi_amount", 0),
+        loan_amount=state.get("loan_amount", 0),
+        tenure_months=state.get("tenure_months", 12),
+        loan_purpose=state.get("loan_purpose", ""),
+    )
+
+
+def _parse_response(text: str) -> dict:
+    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
+    return json.loads(text)
 
 
 async def run_lead_qualification(state: ApplicationState) -> ApplicationState:
     """
-    Node: lead_qualification
-    Responsibility: Evaluate eligibility criteria (age, income, loan amount limits),
-    query RAG for relevant policy, decide qualified/rejected.
+    Node 2: lead_qualification
+    Simulates document verification: salary slips, ITR, bank statements.
+    Checks income consistency and loan-to-income ratio.
+    Outputs: qualification_result (pass|fail|request_info), verified_income, max_eligible_amount.
     """
-    # TODO: RAG query for eligibility policy, render prompt, call Claude,
-    #       parse JSON → qualification_result, qualification_notes
-    updated_state = {**state, "current_stage": "lead_qualification"}
-    event_publisher.publish(
-        stream="loan:events",
-        event_type="node.completed",
-        payload={
-            "application_id": state.get("application_id"),
-            "stage": "lead_qualification",
-            "stage_results": updated_state.get("stage_results", {}),
-        },
-    )
-    return updated_state
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    prompt = _render_prompt(state)
+
+    try:
+        response = await client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=512,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text
+        result = _parse_response(raw)
+
+        updated_state = {
+            **state,
+            "current_stage": "lead_qualification",
+            "qualification_result": result.get("qualification_result", "fail"),
+            "qualification_notes": result.get("qualification_notes", ""),
+            "verified_income": float(result.get("verified_income", 0)),
+            "max_eligible_amount": float(result.get("max_eligible_amount", 0)),
+            "stage_results": {
+                **state.get("stage_results", {}),
+                "lead_qualification": {
+                    "qualification_result": result.get("qualification_result"),
+                    "qualification_notes": result.get("qualification_notes"),
+                    "verified_income": result.get("verified_income"),
+                    "max_eligible_amount": result.get("max_eligible_amount"),
+                    "income_consistency": result.get("income_consistency"),
+                    "affordability_ratio": result.get("affordability_ratio"),
+                    "document_issues": result.get("document_issues", []),
+                },
+            },
+        }
+        event_publisher.publish(
+            stream="loan:events",
+            event_type="node.completed",
+            payload={
+                "application_id": state.get("application_id"),
+                "stage": "lead_qualification",
+                "stage_results": updated_state["stage_results"],
+            },
+        )
+        return updated_state
+
+    except Exception as e:
+        logger.error("lead_qualification failed for %s: %s", state.get("application_id"), e)
+        return {
+            **state,
+            "current_stage": "lead_qualification",
+            "qualification_result": "fail",
+            "pipeline_errors": [*state.get("pipeline_errors", []), f"lead_qualification: {e}"],
+        }

@@ -100,7 +100,7 @@ class EventConsumer:
 
             await websocket_manager.broadcast(application_id, {
                 "event": "hitl.requested",
-                "stage": "sanction_processing",
+                "stage": "art_negotiation",
                 "data": payload,
             })
 

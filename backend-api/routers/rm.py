@@ -49,7 +49,7 @@ async def submit_review(application_id: str, payload: RMReviewSubmit):
 
         if payload.decision.value == "approve":
             app.status = "approved"
-            app.current_stage = "disbursement"
+            app.current_stage = "art_negotiation"
         elif payload.decision.value == "reject":
             app.status = "rejected"
         else:
@@ -100,6 +100,9 @@ async def get_review_context(application_id: str):
             "application": {
                 "id": app.id, "full_name": app.full_name, "email": app.email,
                 "phone": app.phone, "pan_number": app.pan_number,
+                "employment_type": app.employment_type,
+                "monthly_income": app.monthly_income,
+                "existing_emi_amount": app.existing_emi_amount,
                 "loan_amount": app.loan_amount, "loan_purpose": app.loan_purpose,
                 "tenure_months": app.tenure_months, "status": app.status,
                 "current_stage": app.current_stage,

@@ -1,5 +1,4 @@
 from typing import TypedDict, Optional, Any
-from datetime import datetime
 
 
 class ApplicationState(TypedDict, total=False):
@@ -7,13 +6,15 @@ class ApplicationState(TypedDict, total=False):
     application_id: str
     created_at: str
 
-    # ── Applicant info ─────────────────────────────────────────────────────────
+    # ── Applicant info (web form) ──────────────────────────────────────────────
     full_name: str
     phone: str
     email: str
     pan_number: str
-    date_of_birth: str
-    address: dict[str, Any]
+    date_of_birth: str          # YYYY-MM-DD
+    employment_type: str        # salaried | self_employed | business
+    monthly_income: float       # declared monthly income in ₹
+    existing_emi_amount: float  # current monthly EMI obligations in ₹
 
     # ── Loan request ───────────────────────────────────────────────────────────
     loan_amount: float
@@ -22,58 +23,60 @@ class ApplicationState(TypedDict, total=False):
 
     # ── Pipeline stage tracking ────────────────────────────────────────────────
     current_stage: str
-    stage_results: dict[str, Any]       # keyed by node name
+    stage_results: dict[str, Any]   # keyed by node name
     pipeline_errors: list[str]
 
-    # ── Lead capture ──────────────────────────────────────────────────────────
+    # ── Node 1: Lead Capture ───────────────────────────────────────────────────
     lead_source: str
-    lead_score: Optional[float]
+    eligibility_result: Optional[str]   # eligible | ineligible
+    eligibility_reason: str
+    data_quality_issues: list[str]
 
-    # ── Lead qualification ────────────────────────────────────────────────────
-    qualification_result: Optional[str]  # qualified | rejected
+    # ── Node 2: Lead Qualification ────────────────────────────────────────────
+    qualification_result: Optional[str]   # pass | fail | request_info
     qualification_notes: str
+    verified_income: Optional[float]      # income verified from docs
+    max_eligible_amount: Optional[float]  # max loan based on income ratio
 
-    # ── Identity verification ─────────────────────────────────────────────────
+    # ── Node 3: Identity Verification ─────────────────────────────────────────
     identity_verified: bool
-    identity_provider_response: dict[str, Any]
-    kyc_status: str
+    pan_verified: bool
+    name_match: bool
+    kyc_status: str                         # verified | failed | mismatch
 
-    # ── Credit assessment ─────────────────────────────────────────────────────
-    credit_score: Optional[int]
-    credit_bureau_response: dict[str, Any]
-    credit_decision: Optional[str]      # approve | reject | manual_review
+    # ── Node 4: Credit Assessment ─────────────────────────────────────────────
+    credit_score: Optional[int]             # 300–900
+    credit_decision: Optional[str]          # approve | reject
     suggested_loan_amount: Optional[float]
+    repayment_history: str                  # good | fair | poor
 
-    # ── Fraud detection ────────────────────────────────────────────────────────
-    fraud_risk_score: Optional[float]   # 0.0 – 1.0
-    fraud_signals: list[str]
-    fraud_decision: Optional[str]       # clear | flag | block
-
-    # ── Compliance ────────────────────────────────────────────────────────────
-    compliance_checks: dict[str, bool]  # AML, PEP, sanctions, etc.
-    compliance_decision: Optional[str]  # pass | fail
-    compliance_notes: str
-
-    # ── Document collection ────────────────────────────────────────────────────
-    required_documents: list[str]
-    uploaded_documents: list[dict[str, Any]]
-    documents_verified: bool
-    ocr_results: dict[str, Any]
-
-    # ── Sanction processing ────────────────────────────────────────────────────
-    sanction_amount: Optional[float]
-    sanction_terms: dict[str, Any]
+    # ── Node 5: ART Negotiation ───────────────────────────────────────────────
+    negotiation_offers: list[dict[str, Any]]  # 2-3 offer options
+    selected_offer: Optional[dict[str, Any]]
+    sanctioned_amount: Optional[float]
+    interest_rate_percent: Optional[float]
+    monthly_emi: Optional[float]
+    total_payable: Optional[float]
+    processing_fee: Optional[float]
+    # HITL fields (reused by art_negotiation)
     hitl_required: bool
-    hitl_decision: Optional[str]        # approve | reject | request_info
+    hitl_decision: Optional[str]    # approve | reject | request_info
     hitl_notes: str
     rm_id: Optional[str]
 
-    # ── Disbursement ──────────────────────────────────────────────────────────
-    disbursement_status: Optional[str]  # pending | success | failed
-    disbursement_reference: Optional[str]
-    disbursement_attempts: int
-    disbursement_error: Optional[str]
+    # ── Node 6: e-NACH ────────────────────────────────────────────────────────
+    enach_status: Optional[str]     # success | failed | pending
+    enach_reference: Optional[str]
+    mandate_id: Optional[str]
+    bank_account_number: Optional[str]
+    ifsc_code: Optional[str]
+
+    # ── Node 7: E-Sign ────────────────────────────────────────────────────────
+    esign_status: Optional[str]     # success | failed
+    esign_reference: Optional[str]
+    agreement_url: Optional[str]
+    signed_at: Optional[str]
 
     # ── LLM interaction ────────────────────────────────────────────────────────
-    messages: list[dict[str, Any]]      # LangChain message history
+    messages: list[dict[str, Any]]
     last_llm_response: Optional[str]

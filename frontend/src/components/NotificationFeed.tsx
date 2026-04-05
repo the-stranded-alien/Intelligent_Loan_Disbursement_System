@@ -33,11 +33,10 @@ function relativeTime(ts?: string): string {
 
 function stageLabel(stage?: string): string {
   const MAP: Record<string, string> = {
-    lead_capture: 'Lead Capture', lead_qualification: 'Qualification',
-    identity_verification: 'Identity', credit_assessment: 'Credit',
-    fraud_detection: 'Fraud', compliance: 'Compliance',
-    document_collection: 'Documents', sanction_processing: 'Sanction',
-    disbursement: 'Disbursement',
+    lead_capture: 'Eligibility Check', lead_qualification: 'Doc Verification',
+    identity_verification: 'KYC', credit_assessment: 'Credit',
+    art_negotiation: 'ART & Offer', enach: 'e-NACH Setup',
+    esign: 'E-Sign',
   }
   return stage ? (MAP[stage] ?? stage) : ''
 }

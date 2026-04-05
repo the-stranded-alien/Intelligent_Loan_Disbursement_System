@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   CheckCircle2, Circle, Loader2, XCircle, Clock,
   User, ClipboardCheck, ShieldCheck, CreditCard,
-  AlertTriangle, Scale, FileText, BadgeCheck, Banknote,
+  Calculator, Building2, FileCheck,
   ChevronDown, ChevronUp, Brain, UserCheck, AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -25,63 +25,69 @@ interface Props {
 // ── Stage metadata ───────────────────────────────────────────────────────────
 
 const STAGES = [
-  { key: 'lead_capture',          label: 'Lead Capture',          icon: User },
-  { key: 'lead_qualification',    label: 'Lead Qualification',    icon: ClipboardCheck },
-  { key: 'identity_verification', label: 'Identity Verification', icon: ShieldCheck },
+  { key: 'lead_capture',          label: 'Eligibility Check',     icon: User },
+  { key: 'lead_qualification',    label: 'Document Verification', icon: ClipboardCheck },
+  { key: 'identity_verification', label: 'KYC Verification',      icon: ShieldCheck },
   { key: 'credit_assessment',     label: 'Credit Assessment',     icon: CreditCard },
-  { key: 'fraud_detection',       label: 'Fraud Detection',       icon: AlertTriangle },
-  { key: 'compliance',            label: 'Compliance',            icon: Scale },
-  { key: 'document_collection',   label: 'Document Collection',   icon: FileText },
-  { key: 'sanction_processing',   label: 'Sanction & Approval',   icon: BadgeCheck },
-  { key: 'disbursement',          label: 'Disbursement',          icon: Banknote },
+  { key: 'art_negotiation',       label: 'ART & Offer',           icon: Calculator },
+  { key: 'enach',                 label: 'e-NACH Setup',           icon: Building2 },
+  { key: 'esign',                 label: 'E-Sign Agreement',      icon: FileCheck },
 ]
 
 // Stage-specific fields to surface in the dropdown
 const STAGE_FIELDS: Record<string, Array<{ key: string; label: string; type: 'text' | 'decision' | 'amount' | 'score' | 'bool' | 'percent' }>> = {
   lead_capture: [
-    { key: 'full_name',    label: 'Applicant',        type: 'text' },
-    { key: 'loan_amount',  label: 'Requested Amount', type: 'amount' },
-    { key: 'loan_purpose', label: 'Purpose',          type: 'text' },
-    { key: 'pan_number',   label: 'PAN',              type: 'text' },
+    { key: 'eligibility_result', label: 'Decision',        type: 'decision' },
+    { key: 'eligibility_reason', label: 'Reason',          type: 'text' },
+    { key: 'applicant_age',      label: 'Age',             type: 'text' },
   ],
   lead_qualification: [
-    { key: 'qualification_result', label: 'Decision', type: 'decision' },
-    { key: 'qualification_notes',  label: 'Notes',    type: 'text' },
+    { key: 'qualification_result',  label: 'Decision',          type: 'decision' },
+    { key: 'qualification_notes',   label: 'Notes',             type: 'text' },
+    { key: 'verified_income',       label: 'Verified Income',   type: 'amount' },
+    { key: 'max_eligible_amount',   label: 'Max Eligible',      type: 'amount' },
+    { key: 'income_consistency',    label: 'Income Consistent', type: 'decision' },
+    { key: 'affordability_ratio',   label: 'Affordability',     type: 'percent' },
   ],
   identity_verification: [
-    { key: 'identity_verified',        label: 'Verified',       type: 'bool' },
-    { key: 'kyc_status',               label: 'KYC Status',     type: 'decision' },
-    { key: 'identity_provider_response', label: 'Provider',     type: 'text' },
+    { key: 'kyc_status',            label: 'KYC Status',        type: 'decision' },
+    { key: 'pan_verified',          label: 'PAN Verified',      type: 'bool' },
+    { key: 'name_match',            label: 'Name Match',        type: 'bool' },
+    { key: 'face_match_confidence', label: 'Face Confidence',   type: 'percent' },
+    { key: 'kyc_notes',             label: 'Notes',             type: 'text' },
   ],
   credit_assessment: [
     { key: 'credit_score',          label: 'Credit Score',      type: 'score' },
     { key: 'credit_decision',       label: 'Decision',          type: 'decision' },
+    { key: 'repayment_history',     label: 'Repayment Hist.',   type: 'decision' },
     { key: 'suggested_loan_amount', label: 'Suggested Amount',  type: 'amount' },
+    { key: 'risk_grade',            label: 'Risk Grade',        type: 'text' },
+    { key: 'dti_ratio',             label: 'DTI Ratio',         type: 'percent' },
   ],
-  fraud_detection: [
-    { key: 'fraud_risk_score', label: 'Risk Score',   type: 'score' },
-    { key: 'fraud_decision',   label: 'Decision',     type: 'decision' },
-    { key: 'fraud_signals',    label: 'Risk Signals', type: 'text' },
-  ],
-  compliance: [
-    { key: 'compliance_decision', label: 'Decision', type: 'decision' },
-    { key: 'compliance_notes',    label: 'Notes',    type: 'text' },
-    { key: 'compliance_checks',   label: 'Checks',   type: 'text' },
-  ],
-  document_collection: [
-    { key: 'documents_verified',  label: 'Verified',   type: 'bool' },
-    { key: 'required_documents',  label: 'Required',   type: 'text' },
-  ],
-  sanction_processing: [
-    { key: 'sanction_amount',       label: 'Sanctioned Amount', type: 'amount' },
+  art_negotiation: [
+    { key: 'sanctioned_amount',     label: 'Sanctioned Amount', type: 'amount' },
     { key: 'interest_rate_percent', label: 'Interest Rate',     type: 'percent' },
     { key: 'monthly_emi',           label: 'Monthly EMI',       type: 'amount' },
     { key: 'total_payable',         label: 'Total Payable',     type: 'amount' },
     { key: 'processing_fee',        label: 'Processing Fee',    type: 'amount' },
+    { key: 'selected_option',       label: 'Selected Offer',    type: 'text' },
+    { key: 'offer_count',           label: 'Offers Generated',  type: 'text' },
   ],
-  disbursement: [
-    { key: 'disbursement_status',    label: 'Status',    type: 'decision' },
-    { key: 'disbursement_reference', label: 'Reference', type: 'text' },
+  enach: [
+    { key: 'enach_status',     label: 'Mandate Status', type: 'decision' },
+    { key: 'mandate_id',       label: 'Mandate ID',     type: 'text' },
+    { key: 'enach_reference',  label: 'Reference',      type: 'text' },
+    { key: 'bank_validated',   label: 'Bank Validated', type: 'bool' },
+    { key: 'account_verified', label: 'Account Verified', type: 'bool' },
+    { key: 'mandate_amount',   label: 'EMI Amount',     type: 'amount' },
+    { key: 'debit_date',       label: 'Monthly Debit',  type: 'text' },
+  ],
+  esign: [
+    { key: 'esign_status',       label: 'Status',           type: 'decision' },
+    { key: 'esign_reference',    label: 'Reference',        type: 'text' },
+    { key: 'signature_method',   label: 'Sign Method',      type: 'text' },
+    { key: 'signed_at',          label: 'Signed At',        type: 'text' },
+    { key: 'esign_notes',        label: 'Notes',            type: 'text' },
   ],
 }
 
@@ -321,7 +327,7 @@ export default function WorkflowTimeline({ currentStage, applicationStatus, audi
         const isOpen    = expanded === stage.key
         const isClickable = status !== 'pending'
         const auditEvent = stageAuditMap[stage.key]
-        const isHITL = stage.key === 'sanction_processing' && !!rmReviewEvent
+        const isHITL = stage.key === 'art_negotiation' && !!rmReviewEvent
 
         return (
           <div key={stage.key}>
@@ -397,7 +403,7 @@ export default function WorkflowTimeline({ currentStage, applicationStatus, audi
                 <StageDetail
                   stageKey={stage.key}
                   auditEvent={auditEvent}
-                  rmEvent={stage.key === 'sanction_processing' ? rmReviewEvent : undefined}
+                  rmEvent={stage.key === 'art_negotiation' ? rmReviewEvent : undefined}
                 />
               </div>
             )}

@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
     """Start a new LangGraph pipeline run for an application.
 
-    The graph has interrupt_before=["sanction_processing"], so ainvoke() always
-    pauses after document_collection. For loans > HITL_THRESHOLD we wait for RM
-    review; for smaller loans we immediately resume.
+    The graph has interrupt_before=["art_negotiation"], so ainvoke() always
+    pauses after credit_assessment. For loans > HITL_THRESHOLD (₹2L) we wait
+    for RM review; for smaller loans we immediately resume.
     """
     initial_state: ApplicationState = {
         "application_id": application_id,
@@ -31,6 +31,12 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
         "phone": initial_data.get("phone", ""),
         "email": initial_data.get("email", ""),
         "pan_number": initial_data.get("pan_number", ""),
+        "date_of_birth": initial_data.get("date_of_birth", ""),
+        "employment_type": initial_data.get("employment_type", "salaried"),
+        "monthly_income": float(initial_data.get("monthly_income", 0)),
+        "existing_emi_amount": float(initial_data.get("existing_emi_amount", 0)),
+        "bank_account_number": initial_data.get("bank_account_number", ""),
+        "ifsc_code": initial_data.get("ifsc_code", ""),
         "loan_amount": float(initial_data.get("loan_amount", 0)),
         "loan_purpose": initial_data.get("loan_purpose", ""),
         "tenure_months": int(initial_data.get("tenure_months", 12)),
@@ -39,7 +45,6 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
         "stage_results": {},
         "pipeline_errors": [],
         "messages": [],
-        "disbursement_attempts": 0,
     }
 
     config = {"configurable": {"thread_id": application_id}}
@@ -110,7 +115,7 @@ def resume_pipeline(self: Task, application_id: str, hitl_decision: dict) -> dic
     """Resume a pipeline that was interrupted at the HITL node.
 
     Injects the RM decision into the checkpoint state, then resumes the graph
-    from sanction_processing through to disbursement.
+    from art_negotiation through enach → esign.
     """
     config = {"configurable": {"thread_id": application_id}}
 

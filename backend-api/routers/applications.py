@@ -11,13 +11,23 @@ router = APIRouter()
 
 
 class ApplicationCreate(BaseModel):
+    # Applicant identity
     full_name: str
     phone: str
     email: str
     pan_number: str
+    date_of_birth: str | None = None
+    # Financial profile
+    employment_type: str | None = "salaried"
+    monthly_income: float | None = 0.0
+    existing_emi_amount: float | None = 0.0
+    bank_account_number: str | None = None
+    ifsc_code: str | None = None
+    # Loan request
     loan_amount: float
     loan_purpose: str | None = None
-    tenure_months: int | None = None
+    tenure_months: int | None = 12
+
 
 @router.post("/")
 async def create_application(payload: ApplicationCreate):
@@ -29,9 +39,15 @@ async def create_application(payload: ApplicationCreate):
             phone=payload.phone,
             email=payload.email,
             pan_number=payload.pan_number,
+            date_of_birth=payload.date_of_birth,
+            employment_type=payload.employment_type or "salaried",
+            monthly_income=payload.monthly_income or 0.0,
+            existing_emi_amount=payload.existing_emi_amount or 0.0,
+            bank_account_number=payload.bank_account_number,
+            ifsc_code=payload.ifsc_code,
             loan_amount=payload.loan_amount,
             loan_purpose=payload.loan_purpose,
-            tenure_months=payload.tenure_months,
+            tenure_months=payload.tenure_months or 12,
             status="pending",
             current_stage="lead_capture",
             created_at=datetime.now(timezone.utc),
@@ -50,6 +66,12 @@ async def create_application(payload: ApplicationCreate):
                 "phone": app.phone,
                 "email": app.email,
                 "pan_number": app.pan_number,
+                "date_of_birth": app.date_of_birth or "",
+                "employment_type": app.employment_type or "salaried",
+                "monthly_income": app.monthly_income or 0.0,
+                "existing_emi_amount": app.existing_emi_amount or 0.0,
+                "bank_account_number": app.bank_account_number or "",
+                "ifsc_code": app.ifsc_code or "",
                 "loan_amount": app.loan_amount,
                 "loan_purpose": app.loan_purpose or "",
                 "tenure_months": app.tenure_months or 12,
@@ -113,6 +135,11 @@ async def get_application_status(application_id: str):
         return {
             "application_id": app.id,
             "full_name": app.full_name,
+            "email": app.email,
+            "phone": app.phone,
+            "pan_number": app.pan_number,
+            "employment_type": app.employment_type,
+            "monthly_income": app.monthly_income,
             "loan_amount": app.loan_amount,
             "loan_purpose": app.loan_purpose,
             "tenure_months": app.tenure_months,
