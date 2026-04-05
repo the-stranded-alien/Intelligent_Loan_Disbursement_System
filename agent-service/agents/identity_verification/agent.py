@@ -26,12 +26,32 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
+def _publish_completed(application_id: str, stage_results: dict):
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.completed",
+        payload={
+            "application_id": application_id,
+            "stage": "identity_verification",
+            "stage_results": stage_results,
+        },
+    )
+
+
 async def run_identity_verification(state: ApplicationState) -> ApplicationState:
     """
     Node 3: identity_verification
     Simulates PAN KYC: format check, name match, liveness check.
     Outputs: identity_verified, pan_verified, name_match, kyc_status.
     """
+    application_id = state.get("application_id")
+
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.started",
+        payload={"application_id": application_id, "stage": "identity_verification"},
+    )
+
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
 
@@ -43,6 +63,20 @@ async def run_identity_verification(state: ApplicationState) -> ApplicationState
         )
         result = parse_llm_json(response.content[0].text)
 
+        # face_match_confidence comes as 0.0–1.0; convert to percentage for UI
+        raw_conf = result.get("face_match_confidence", 0)
+        face_conf_pct = round(float(raw_conf) * 100, 1) if raw_conf <= 1 else round(float(raw_conf), 1)
+
+        stage_result = {
+            "identity_verified": result.get("identity_verified"),
+            "pan_verified": result.get("pan_verified"),
+            "name_match": result.get("name_match"),
+            "kyc_status": result.get("kyc_status"),
+            "pan_entity_type": result.get("pan_entity_type"),
+            "face_match_confidence": face_conf_pct,
+            "kyc_notes": result.get("kyc_notes"),
+        }
+
         updated_state = {
             **state,
             "current_stage": "identity_verification",
@@ -52,34 +86,20 @@ async def run_identity_verification(state: ApplicationState) -> ApplicationState
             "kyc_status": result.get("kyc_status", "failed"),
             "stage_results": {
                 **state.get("stage_results", {}),
-                "identity_verification": {
-                    "identity_verified": result.get("identity_verified"),
-                    "pan_verified": result.get("pan_verified"),
-                    "name_match": result.get("name_match"),
-                    "kyc_status": result.get("kyc_status"),
-                    "pan_entity_type": result.get("pan_entity_type"),
-                    "face_match_confidence": result.get("face_match_confidence"),
-                    "kyc_notes": result.get("kyc_notes"),
-                },
+                "identity_verification": stage_result,
             },
         }
-        event_publisher.publish(
-            stream="loan:events",
-            event_type="node.completed",
-            payload={
-                "application_id": state.get("application_id"),
-                "stage": "identity_verification",
-                "stage_results": updated_state["stage_results"],
-            },
-        )
+        _publish_completed(application_id, updated_state["stage_results"])
         return updated_state
 
     except Exception as e:
-        logger.error("identity_verification failed for %s: %s", state.get("application_id"), e)
-        return {
+        logger.error("identity_verification failed for %s: %s", application_id, e)
+        error_state = {
             **state,
             "current_stage": "identity_verification",
             "identity_verified": False,
             "kyc_status": "failed",
             "pipeline_errors": [*state.get("pipeline_errors", []), f"identity_verification: {e}"],
         }
+        _publish_completed(application_id, error_state.get("stage_results", {}))
+        return error_state
