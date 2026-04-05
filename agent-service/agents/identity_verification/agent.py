@@ -1,6 +1,4 @@
-import json
 import logging
-import re
 from pathlib import Path
 
 import anthropic
@@ -9,10 +7,11 @@ from jinja2 import Template
 from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
+from services.json_parser import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
-AGENT_ROLE = "critic"  # Reviews and validates identity documents
+AGENT_ROLE = "critic"
 
 _PROMPT_PATH = Path(__file__).parent.parent.parent / "config" / "prompts" / "identity_verification.j2"
 
@@ -27,19 +26,11 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
-def _parse_response(text: str) -> dict:
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
-    return json.loads(text)
-
-
 async def run_identity_verification(state: ApplicationState) -> ApplicationState:
     """
     Node 3: identity_verification
-    Simulates PAN KYC: verifies PAN format, name match, and liveness check.
+    Simulates PAN KYC: format check, name match, liveness check.
     Outputs: identity_verified, pan_verified, name_match, kyc_status.
-    A failed KYC (kyc_status == 'failed' or 'mismatch') routes to rejection.
     """
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
@@ -50,8 +41,7 @@ async def run_identity_verification(state: ApplicationState) -> ApplicationState
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.content[0].text
-        result = _parse_response(raw)
+        result = parse_llm_json(response.content[0].text)
 
         updated_state = {
             **state,

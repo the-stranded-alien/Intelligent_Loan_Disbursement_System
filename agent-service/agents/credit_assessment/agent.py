@@ -1,6 +1,4 @@
-import json
 import logging
-import re
 from pathlib import Path
 
 import anthropic
@@ -9,10 +7,11 @@ from jinja2 import Template
 from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
+from services.json_parser import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
-AGENT_ROLE = "analyst"  # Quantitative credit risk analysis
+AGENT_ROLE = "analyst"
 
 _PROMPT_PATH = Path(__file__).parent.parent.parent / "config" / "prompts" / "credit_assessment.j2"
 
@@ -32,19 +31,11 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
-def _parse_response(text: str) -> dict:
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
-    return json.loads(text)
-
-
 async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
     """
     Node 4: credit_assessment
-    Simulates a CIBIL/Experian credit bureau pull using PAN + income data.
-    Outputs: credit_score (300-900), credit_decision (approve|reject),
-             suggested_loan_amount, repayment_history.
+    Simulates CIBIL/Experian credit bureau pull.
+    Outputs: credit_score (300-900), credit_decision (approve|reject), suggested_loan_amount.
     """
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
@@ -55,8 +46,7 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.content[0].text
-        result = _parse_response(raw)
+        result = parse_llm_json(response.content[0].text)
 
         updated_state = {
             **state,

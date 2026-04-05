@@ -22,8 +22,9 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
     """Start a new LangGraph pipeline run for an application.
 
     The graph has interrupt_before=["art_negotiation"], so ainvoke() always
-    pauses after credit_assessment. For loans > HITL_THRESHOLD (₹2L) we wait
-    for RM review; for smaller loans we immediately resume.
+    pauses after credit_assessment. We detect whether the graph actually
+    interrupted (pipeline paused awaiting HITL / auto-resume) or ended early
+    (rejected at Node 1–4) by inspecting state_snapshot.next after ainvoke.
     """
     initial_state: ApplicationState = {
         "application_id": application_id,
@@ -53,55 +54,62 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
         checkpointer = await get_checkpointer()
         graph = build_graph(checkpointer=checkpointer)
 
-        # First ainvoke — runs lead_capture through document_collection,
-        # then pauses before sanction_processing (interrupt_before).
+        # First ainvoke — runs Nodes 1–4 then pauses before art_negotiation
+        # (due to interrupt_before). If pipeline rejects early (Node 1/2/3/4),
+        # ainvoke also returns but the graph has no next nodes.
         result = await graph.ainvoke(initial_state, config=config)
 
-        loan_amount = result.get("loan_amount", 0)
-        if loan_amount > settings.hitl_threshold:
-            # Signal backend-api to mark application as pending_review and
-            # surface it in the RM dashboard. Pipeline resumes via resume_pipeline
-            # once the RM submits a decision.
-            event_publisher.publish(
-                stream="loan:events",
-                event_type="hitl.requested",
-                payload={
-                    "application_id": application_id,
-                    "loan_amount": loan_amount,
-                    "stage_results": result.get("stage_results", {}),
-                },
-            )
-            logger.info("Pipeline paused for HITL review: %s (₹%s)", application_id, loan_amount)
-            return result
+        # Reliable interrupt detection: if graph.next is non-empty the
+        # pipeline was paused (interrupted); if empty it reached END.
+        snapshot = await graph.aget_state(config)
+        is_interrupted = bool(snapshot.next)
 
-        # Small loan — auto-resume through sanction_processing → disbursement.
-        result = await graph.ainvoke(None, config=config)
+        loan_amount = result.get("loan_amount", 0)
+
+        if is_interrupted:
+            # Pipeline paused before art_negotiation — large loan → wait for RM.
+            if loan_amount > settings.hitl_threshold:
+                event_publisher.publish(
+                    stream="loan:events",
+                    event_type="hitl.requested",
+                    payload={
+                        "application_id": application_id,
+                        "loan_amount": loan_amount,
+                        "stage_results": result.get("stage_results", {}),
+                    },
+                )
+                logger.info("Pipeline paused for HITL: %s (₹%s)", application_id, loan_amount)
+                return result
+
+            # Small loan — auto-resume through art_negotiation → enach → esign.
+            result = await graph.ainvoke(None, config=config)
+            _publish_completed(application_id, result, "completed")
+        else:
+            # Pipeline ended early (rejected at Node 1/2/3/4).
+            _publish_completed(application_id, result, "rejected")
+
         return result
 
     try:
         result = asyncio.run(_run())
-
-        # Only publish pipeline.completed when the pipeline fully finished
-        # (i.e. not waiting for HITL). For HITL cases the hitl.requested event
-        # was already published above; pipeline.completed fires from resume_pipeline.
-        if not (result.get("loan_amount", 0) > settings.hitl_threshold and
-                result.get("hitl_decision") is None):
-            event_publisher.publish(
-                stream="loan:events",
-                event_type="pipeline.completed",
-                payload={
-                    "application_id": application_id,
-                    "stage": result.get("current_stage"),
-                    "lead_score": result.get("lead_score"),
-                    "stage_results": result.get("stage_results", {}),
-                },
-            )
-
         logger.info("Pipeline task done for %s at stage %s", application_id, result.get("current_stage"))
         return {"application_id": application_id, "stage": result.get("current_stage")}
     except Exception as exc:
         logger.error("Pipeline error for %s: %s", application_id, exc)
         raise self.retry(exc=exc)
+
+
+def _publish_completed(application_id: str, result: dict, final_status: str):
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="pipeline.completed",
+        payload={
+            "application_id": application_id,
+            "stage": result.get("current_stage"),
+            "final_status": final_status,
+            "stage_results": result.get("stage_results", {}),
+        },
+    )
 
 
 @celery_app.task(
@@ -123,8 +131,6 @@ def resume_pipeline(self: Task, application_id: str, hitl_decision: dict) -> dic
         checkpointer = await get_checkpointer()
         graph = build_graph(checkpointer=checkpointer)
 
-        # Inject the RM decision into the persisted checkpoint state so that
-        # sanction_processing can see it when the graph resumes.
         await graph.aupdate_state(
             config,
             values={
@@ -134,22 +140,14 @@ def resume_pipeline(self: Task, application_id: str, hitl_decision: dict) -> dic
             },
         )
 
-        # Resume — graph continues from sanction_processing.
         result = await graph.ainvoke(None, config=config)
         return result
 
     try:
         result = asyncio.run(_resume())
-        event_publisher.publish(
-            stream="loan:events",
-            event_type="pipeline.completed",
-            payload={
-                "application_id": application_id,
-                "stage": result.get("current_stage"),
-                "lead_score": result.get("lead_score"),
-                "stage_results": result.get("stage_results", {}),
-            },
-        )
+        decision = hitl_decision.get("decision", "approve")
+        final_status = "completed" if decision == "approve" else "rejected"
+        _publish_completed(application_id, result, final_status)
         logger.info("Pipeline resumed and completed for %s", application_id)
         return {"application_id": application_id, "stage": result.get("current_stage")}
     except Exception as exc:

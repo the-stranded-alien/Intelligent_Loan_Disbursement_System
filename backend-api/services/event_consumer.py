@@ -107,11 +107,12 @@ class EventConsumer:
         elif event_type == "pipeline.completed":
             application_id = payload.get("application_id")
             stage = payload.get("stage")
+            final_status = payload.get("final_status", "completed")
             db = SessionLocal()
             try:
                 app = db.query(Application).filter(Application.id == application_id).first()
                 if app:
-                    app.status = "completed"
+                    app.status = final_status
                     app.current_stage = stage
                     app.updated_at = datetime.now(timezone.utc)
                     db.commit()
@@ -121,6 +122,7 @@ class EventConsumer:
             await websocket_manager.broadcast(application_id, {
                 "event": "pipeline.completed",
                 "stage": stage,
+                "status": final_status,
                 "data": payload,
             })
 

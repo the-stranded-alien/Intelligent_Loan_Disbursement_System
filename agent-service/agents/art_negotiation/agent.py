@@ -1,6 +1,4 @@
-import json
 import logging
-import re
 from pathlib import Path
 
 import anthropic
@@ -9,10 +7,11 @@ from jinja2 import Template
 from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
+from services.json_parser import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
-AGENT_ROLE = "planner"  # Synthesises all upstream outputs into final loan offer
+AGENT_ROLE = "planner"
 
 _PROMPT_PATH = Path(__file__).parent.parent.parent / "config" / "prompts" / "art_negotiation.j2"
 
@@ -43,20 +42,11 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
-def _parse_response(text: str) -> dict:
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
-    return json.loads(text)
-
-
 async def run_art_negotiation(state: ApplicationState) -> ApplicationState:
     """
     Node 5: art_negotiation
-    Planner node — synthesises credit score, income, and RM decision (if HITL)
-    to produce 3 loan offer options (Amount, Rate, Tenure).
-    For loans > HITL_THRESHOLD (₹2L), graph is interrupted before this node and
-    resumed after RM approves/rejects.
+    Planner node — synthesises all upstream outputs into 3 loan offer options.
+    HITL interrupt for loans > ₹2L.
     """
     loan_amount = state.get("loan_amount", 0)
     hitl_required = loan_amount > settings.hitl_threshold
@@ -70,8 +60,7 @@ async def run_art_negotiation(state: ApplicationState) -> ApplicationState:
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.content[0].text
-        result = _parse_response(raw)
+        result = parse_llm_json(response.content[0].text)
 
         updated_state = {
             **state,

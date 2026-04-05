@@ -1,6 +1,4 @@
-import json
 import logging
-import re
 from pathlib import Path
 
 import anthropic
@@ -9,10 +7,11 @@ from jinja2 import Template
 from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
+from services.json_parser import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
-AGENT_ROLE = "coordinator"  # Orchestrates e-NACH mandate setup with NPCI
+AGENT_ROLE = "coordinator"
 
 _PROMPT_PATH = Path(__file__).parent.parent.parent / "config" / "prompts" / "enach.j2"
 
@@ -29,18 +28,11 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
-def _parse_response(text: str) -> dict:
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
-    return json.loads(text)
-
-
 async def run_enach(state: ApplicationState) -> ApplicationState:
     """
     Node 6: enach
-    Simulates e-NACH auto-debit mandate registration with NPCI for EMI collection.
-    Outputs: enach_status (success|failed|pending), mandate_id, enach_reference.
+    Simulates e-NACH auto-debit mandate registration with NPCI.
+    Outputs: enach_status, mandate_id, enach_reference.
     """
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
@@ -51,8 +43,7 @@ async def run_enach(state: ApplicationState) -> ApplicationState:
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.content[0].text
-        result = _parse_response(raw)
+        result = parse_llm_json(response.content[0].text)
 
         updated_state = {
             **state,

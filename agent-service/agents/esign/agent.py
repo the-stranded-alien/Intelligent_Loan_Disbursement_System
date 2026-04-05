@@ -1,6 +1,4 @@
-import json
 import logging
-import re
 from pathlib import Path
 
 import anthropic
@@ -9,10 +7,11 @@ from jinja2 import Template
 from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
+from services.json_parser import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
-AGENT_ROLE = "coordinator"  # Orchestrates e-sign document workflow
+AGENT_ROLE = "coordinator"
 
 _PROMPT_PATH = Path(__file__).parent.parent.parent / "config" / "prompts" / "esign.j2"
 
@@ -32,19 +31,10 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
-def _parse_response(text: str) -> dict:
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
-    return json.loads(text)
-
-
 async def run_esign(state: ApplicationState) -> ApplicationState:
     """
     Node 7: esign
-    Simulates Aadhaar/OTP-based e-sign of the loan agreement.
-    Outputs: esign_status (success|failed), esign_reference, agreement_url, signed_at.
-    This is the terminal node — pipeline.completed is published after this.
+    Simulates Aadhaar/OTP e-sign of the loan agreement. Terminal node.
     """
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
@@ -55,8 +45,7 @@ async def run_esign(state: ApplicationState) -> ApplicationState:
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.content[0].text
-        result = _parse_response(raw)
+        result = parse_llm_json(response.content[0].text)
 
         updated_state = {
             **state,

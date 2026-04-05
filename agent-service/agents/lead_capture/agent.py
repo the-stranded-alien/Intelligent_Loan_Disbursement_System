@@ -1,6 +1,4 @@
-import json
 import logging
-import re
 from pathlib import Path
 
 import anthropic
@@ -9,6 +7,7 @@ from jinja2 import Template
 from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
+from services.json_parser import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +33,6 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
-def _parse_response(text: str) -> dict:
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
-    return json.loads(text)
-
-
 async def run_lead_capture(state: ApplicationState) -> ApplicationState:
     """
     Node 1: lead_capture
@@ -58,7 +50,7 @@ async def run_lead_capture(state: ApplicationState) -> ApplicationState:
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.content[0].text
-        result = _parse_response(raw)
+        result = parse_llm_json(raw)
 
         updated_state = {
             **state,
