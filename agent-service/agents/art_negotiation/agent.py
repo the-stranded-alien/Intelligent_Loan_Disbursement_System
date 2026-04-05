@@ -48,8 +48,15 @@ async def run_art_negotiation(state: ApplicationState) -> ApplicationState:
     Planner node — synthesises all upstream outputs into 3 loan offer options.
     HITL interrupt for loans > ₹2L.
     """
+    application_id = state.get("application_id")
     loan_amount = state.get("loan_amount", 0)
     hitl_required = loan_amount > settings.hitl_threshold
+
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.started",
+        payload={"application_id": application_id, "stage": "art_negotiation"},
+    )
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
