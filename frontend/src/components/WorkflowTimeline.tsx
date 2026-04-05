@@ -18,6 +18,7 @@ export interface AuditEvent {
 
 interface Props {
   currentStage?: string | null
+  activeStage?: string | null    // stage currently executing (from node.started)
   applicationStatus?: string
   auditEvents?: AuditEvent[]
 }
@@ -95,13 +96,25 @@ const STAGE_FIELDS: Record<string, Array<{ key: string; label: string; type: 'te
 
 type StageStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 
-function getStatus(key: string, currentStage: string | null | undefined, appStatus: string | undefined): StageStatus {
+function getStatus(
+  key: string,
+  currentStage: string | null | undefined,
+  appStatus: string | undefined,
+  activeStage: string | null,
+): StageStatus {
   if (!currentStage) return 'pending'
   const ci = STAGES.findIndex(s => s.key === currentStage)
   const si = STAGES.findIndex(s => s.key === key)
+
   if (appStatus === 'rejected' && si === ci) return 'failed'
-  if (appStatus === 'completed' || appStatus === 'disbursed' || si < ci) return 'completed'
-  if (si === ci) return 'in_progress'
+  if (appStatus === 'completed' || appStatus === 'disbursed') return 'completed'
+
+  // activeStage is set by node.started — show it as in_progress while executing
+  if (activeStage && key === activeStage) return 'in_progress'
+
+  // Stages before current are completed; current and beyond determined by si vs ci
+  if (si < ci) return 'completed'
+  if (si === ci) return 'completed'  // node.completed means this stage is done
   return 'pending'
 }
 
@@ -297,13 +310,14 @@ function StageDetail({ stageKey, auditEvent, rmEvent }: StageDetailProps) {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function WorkflowTimeline({ currentStage, applicationStatus, auditEvents = [] }: Props) {
-  // Auto-expand the active stage
-  const [expanded, setExpanded] = useState<string | null>(currentStage ?? null)
+export default function WorkflowTimeline({ currentStage, activeStage = null, applicationStatus, auditEvents = [] }: Props) {
+  // Auto-expand the actively executing stage
+  const [expanded, setExpanded] = useState<string | null>(activeStage ?? currentStage ?? null)
 
   useEffect(() => {
-    if (currentStage) setExpanded(currentStage)
-  }, [currentStage])
+    if (activeStage) setExpanded(activeStage)
+    else if (currentStage) setExpanded(currentStage)
+  }, [activeStage, currentStage])
 
   // Index audit events by stage key for O(1) lookup
   const stageAuditMap: Record<string, AuditEvent> = {}
@@ -321,7 +335,7 @@ export default function WorkflowTimeline({ currentStage, applicationStatus, audi
   return (
     <div className="space-y-0.5">
       {STAGES.map((stage, idx) => {
-        const status    = getStatus(stage.key, currentStage, applicationStatus)
+        const status    = getStatus(stage.key, currentStage, applicationStatus, activeStage)
         const isLast    = idx === STAGES.length - 1
         const Icon      = stage.icon
         const isOpen    = expanded === stage.key

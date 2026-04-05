@@ -60,6 +60,7 @@ export default function StatusTracker() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [copied, setCopied]   = useState(false)
+  const [activeStage, setActiveStage] = useState<string | null>(null)
 
   // ── Live WebSocket — owned here and passed to children ──────────────────
   const { events: wsEvents, connected: wsConnected } = useWorkflowSocket(appId || undefined)
@@ -70,10 +71,12 @@ export default function StatusTracker() {
     if (!latest || latest === lastWsEvent.current) return
     lastWsEvent.current = latest
 
-    if (latest.event === 'node.completed' && latest.stage) {
-      // Immediately advance the current stage shown in the timeline
+    if (latest.event === 'node.started' && latest.stage) {
+      setActiveStage(latest.stage)
+    } else if (latest.event === 'node.completed' && latest.stage) {
+      setActiveStage(null)  // node done — clear active indicator
       setStatus(s => s ? { ...s, current_stage: latest.stage! } : s)
-      // Background-fetch updated audit events to populate stage results
+      // Background-fetch updated audit events to populate stage result dropdowns
       if (appId) {
         fetch(`/api/v1/applications/${appId}/events`)
           .then(r => r.ok ? r.json() : [])
@@ -234,6 +237,7 @@ export default function StatusTracker() {
               </div>
               <WorkflowTimeline
                 currentStage={status.current_stage}
+                activeStage={activeStage}
                 applicationStatus={status.status}
                 auditEvents={events}
               />

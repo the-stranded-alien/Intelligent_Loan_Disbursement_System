@@ -58,7 +58,25 @@ class EventConsumer:
         except Exception:
             payload = {}
 
-        if event_type == "node.completed":
+        if event_type == "node.started":
+            application_id = payload.get("application_id")
+            stage = payload.get("stage")
+            db = SessionLocal()
+            try:
+                app = db.query(Application).filter(Application.id == application_id).first()
+                if app:
+                    app.current_stage = stage
+                    app.status = "processing"
+                    app.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+            finally:
+                db.close()
+            await websocket_manager.broadcast(application_id, {
+                "event": "node.started",
+                "stage": stage,
+            })
+
+        elif event_type == "node.completed":
             application_id = payload.get("application_id")
             stage = payload.get("stage")
             db = SessionLocal()

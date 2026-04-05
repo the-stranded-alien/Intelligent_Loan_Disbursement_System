@@ -40,6 +40,13 @@ async def run_lead_capture(state: ApplicationState) -> ApplicationState:
     income, loan limits). Does NOT check documents or credit — that is downstream.
     Outputs: eligibility_result (eligible|ineligible), eligibility_reason.
     """
+    application_id = state.get("application_id")
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.started",
+        payload={"application_id": application_id, "stage": "lead_capture"},
+    )
+
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
 
@@ -83,9 +90,19 @@ async def run_lead_capture(state: ApplicationState) -> ApplicationState:
 
     except Exception as e:
         logger.error("lead_capture failed for %s: %s", state.get("application_id"), e)
-        return {
+        error_state = {
             **state,
             "current_stage": "lead_capture",
             "eligibility_result": "ineligible",
             "pipeline_errors": [*state.get("pipeline_errors", []), f"lead_capture: {e}"],
         }
+        event_publisher.publish(
+            stream="loan:events",
+            event_type="node.completed",
+            payload={
+                "application_id": state.get("application_id"),
+                "stage": "lead_capture",
+                "stage_results": error_state.get("stage_results", {}),
+            },
+        )
+        return error_state
