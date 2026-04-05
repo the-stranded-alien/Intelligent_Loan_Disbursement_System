@@ -31,12 +31,32 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
+def _publish_completed(application_id: str, stage_results: dict):
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.completed",
+        payload={
+            "application_id": application_id,
+            "stage": "credit_assessment",
+            "stage_results": stage_results,
+        },
+    )
+
+
 async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
     """
     Node 4: credit_assessment
     Simulates CIBIL/Experian credit bureau pull.
     Outputs: credit_score (300-900), credit_decision (approve|reject), suggested_loan_amount.
     """
+    application_id = state.get("application_id")
+
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.started",
+        payload={"application_id": application_id, "stage": "credit_assessment"},
+    )
+
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
 
@@ -48,6 +68,20 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
         )
         result = parse_llm_json(response.content[0].text)
 
+        # dti_ratio comes as 0–1 decimal; convert to percentage for UI
+        raw_dti = result.get("dti_ratio", 0)
+        dti_pct = round(float(raw_dti) * 100, 1) if raw_dti <= 1 else round(float(raw_dti), 1)
+
+        stage_result = {
+            "credit_score": result.get("credit_score"),
+            "credit_decision": result.get("credit_decision"),
+            "suggested_loan_amount": result.get("suggested_loan_amount"),
+            "repayment_history": result.get("repayment_history"),
+            "dti_ratio": dti_pct,
+            "risk_grade": result.get("risk_grade"),
+            "credit_notes": result.get("credit_notes"),
+        }
+
         updated_state = {
             **state,
             "current_stage": "credit_assessment",
@@ -57,33 +91,19 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
             "repayment_history": result.get("repayment_history", "fair"),
             "stage_results": {
                 **state.get("stage_results", {}),
-                "credit_assessment": {
-                    "credit_score": result.get("credit_score"),
-                    "credit_decision": result.get("credit_decision"),
-                    "suggested_loan_amount": result.get("suggested_loan_amount"),
-                    "repayment_history": result.get("repayment_history"),
-                    "dti_ratio": result.get("dti_ratio"),
-                    "risk_grade": result.get("risk_grade"),
-                    "credit_notes": result.get("credit_notes"),
-                },
+                "credit_assessment": stage_result,
             },
         }
-        event_publisher.publish(
-            stream="loan:events",
-            event_type="node.completed",
-            payload={
-                "application_id": state.get("application_id"),
-                "stage": "credit_assessment",
-                "stage_results": updated_state["stage_results"],
-            },
-        )
+        _publish_completed(application_id, updated_state["stage_results"])
         return updated_state
 
     except Exception as e:
-        logger.error("credit_assessment failed for %s: %s", state.get("application_id"), e)
-        return {
+        logger.error("credit_assessment failed for %s: %s", application_id, e)
+        error_state = {
             **state,
             "current_stage": "credit_assessment",
             "credit_decision": "reject",
             "pipeline_errors": [*state.get("pipeline_errors", []), f"credit_assessment: {e}"],
         }
+        _publish_completed(application_id, error_state.get("stage_results", {}))
+        return error_state
