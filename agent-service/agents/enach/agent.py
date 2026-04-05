@@ -28,12 +28,32 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
+def _publish_completed(application_id: str, stage_results: dict):
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.completed",
+        payload={
+            "application_id": application_id,
+            "stage": "enach",
+            "stage_results": stage_results,
+        },
+    )
+
+
 async def run_enach(state: ApplicationState) -> ApplicationState:
     """
     Node 6: enach
     Simulates e-NACH auto-debit mandate registration with NPCI.
     Outputs: enach_status, mandate_id, enach_reference.
     """
+    application_id = state.get("application_id")
+
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.started",
+        payload={"application_id": application_id, "stage": "enach"},
+    )
+
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
 
@@ -65,22 +85,16 @@ async def run_enach(state: ApplicationState) -> ApplicationState:
                 },
             },
         }
-        event_publisher.publish(
-            stream="loan:events",
-            event_type="node.completed",
-            payload={
-                "application_id": state.get("application_id"),
-                "stage": "enach",
-                "stage_results": updated_state["stage_results"],
-            },
-        )
+        _publish_completed(application_id, updated_state["stage_results"])
         return updated_state
 
     except Exception as e:
-        logger.error("enach failed for %s: %s", state.get("application_id"), e)
-        return {
+        logger.error("enach failed for %s: %s", application_id, e)
+        error_state = {
             **state,
             "current_stage": "enach",
             "enach_status": "failed",
             "pipeline_errors": [*state.get("pipeline_errors", []), f"enach: {e}"],
         }
+        _publish_completed(application_id, error_state.get("stage_results", {}))
+        return error_state
