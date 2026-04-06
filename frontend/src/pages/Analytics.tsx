@@ -50,11 +50,9 @@ const STAGE_LABELS: Record<string, string> = {
   lead_qualification:     'Qualification',
   identity_verification:  'Identity',
   credit_assessment:      'Credit',
-  fraud_detection:        'Fraud',
-  compliance:             'Compliance',
-  document_collection:    'Documents',
-  sanction_processing:    'Sanction',
-  disbursement:           'Disbursement',
+  art_negotiation:        'ART & Offer',
+  enach:                  'e-NACH',
+  esign:                  'E-Sign',
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

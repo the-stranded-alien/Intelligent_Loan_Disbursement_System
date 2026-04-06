@@ -15,11 +15,17 @@ export function useWorkflowSocket(applicationId: string | undefined) {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const attempts = useRef(0)
+  const dead = useRef(false)   // set on unmount — prevents reconnect loop
 
   useEffect(() => {
     if (!applicationId) return
 
+    dead.current = false
+    attempts.current = 0
+
     function connect() {
+      if (dead.current) return
+
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const ws = new WebSocket(`${protocol}://${window.location.host}/ws/${applicationId}`)
       wsRef.current = ws
@@ -38,6 +44,7 @@ export function useWorkflowSocket(applicationId: string | undefined) {
 
       ws.onclose = () => {
         setConnected(false)
+        if (dead.current) return   // intentional close — do not reconnect
         const delay = Math.min(1000 * 2 ** attempts.current, 30000)
         attempts.current += 1
         reconnectTimer.current = setTimeout(connect, delay)
@@ -49,6 +56,7 @@ export function useWorkflowSocket(applicationId: string | undefined) {
     connect()
 
     return () => {
+      dead.current = true
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
       wsRef.current?.close()
     }
