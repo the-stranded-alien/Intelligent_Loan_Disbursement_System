@@ -98,13 +98,21 @@ async def get_review_context(application_id: str):
 
         return {
             "application": {
-                "id": app.id, "full_name": app.full_name, "email": app.email,
-                "phone": app.phone, "pan_number": app.pan_number,
+                "id": app.id,
+                "full_name": app.full_name,
+                "email": app.email,
+                "phone": app.phone,
+                "pan_number": app.pan_number,
+                "date_of_birth": app.date_of_birth,
                 "employment_type": app.employment_type,
                 "monthly_income": app.monthly_income,
                 "existing_emi_amount": app.existing_emi_amount,
-                "loan_amount": app.loan_amount, "loan_purpose": app.loan_purpose,
-                "tenure_months": app.tenure_months, "status": app.status,
+                "bank_account_number": app.bank_account_number,
+                "ifsc_code": app.ifsc_code,
+                "loan_amount": app.loan_amount,
+                "loan_purpose": app.loan_purpose,
+                "tenure_months": app.tenure_months,
+                "status": app.status,
                 "current_stage": app.current_stage,
             },
             "audit_trail": [

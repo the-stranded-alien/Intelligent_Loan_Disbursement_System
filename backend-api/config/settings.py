@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # App
     environment: str = "development"
     log_level: str = "INFO"
-    hitl_threshold: int = 1_000_000
+    hitl_threshold: int = 200_000
 
 
 settings = Settings()

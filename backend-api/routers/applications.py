@@ -181,11 +181,24 @@ async def get_application(application_id: str):
         if not app:
             raise HTTPException(status_code=404, detail="Application not found")
         return {
-            "id": app.id, "full_name": app.full_name, "phone": app.phone,
-            "email": app.email, "pan_number": app.pan_number,
-            "loan_amount": app.loan_amount, "loan_purpose": app.loan_purpose,
-            "tenure_months": app.tenure_months, "status": app.status,
-            "stage": app.current_stage, "created_at": str(app.created_at),
+            "id": app.id,
+            "full_name": app.full_name,
+            "phone": app.phone,
+            "email": app.email,
+            "pan_number": app.pan_number,
+            "date_of_birth": app.date_of_birth,
+            "employment_type": app.employment_type,
+            "monthly_income": app.monthly_income,
+            "existing_emi_amount": app.existing_emi_amount,
+            "bank_account_number": app.bank_account_number,
+            "ifsc_code": app.ifsc_code,
+            "loan_amount": app.loan_amount,
+            "loan_purpose": app.loan_purpose,
+            "tenure_months": app.tenure_months,
+            "status": app.status,
+            "stage": app.current_stage,
+            "created_at": str(app.created_at),
+            "updated_at": str(app.updated_at),
         }
     finally:
         db.close()

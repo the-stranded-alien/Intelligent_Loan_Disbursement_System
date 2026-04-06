@@ -3,21 +3,23 @@ from typing import Optional
 from datetime import datetime
 
 
-class ApplicantBase(BaseModel):
+class ApplicationCreate(BaseModel):
+    # Applicant identity
     full_name: str
     phone: str
     email: str
     pan_number: str
-
-
-class LoanRequestBase(BaseModel):
+    date_of_birth: Optional[str] = None
+    # Financial profile
+    employment_type: Optional[str] = "salaried"
+    monthly_income: Optional[float] = 0.0
+    existing_emi_amount: Optional[float] = 0.0
+    bank_account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    # Loan request
     loan_amount: float
-    loan_purpose: str
-    tenure_months: int
-
-
-class ApplicationCreate(ApplicantBase, LoanRequestBase):
-    pass
+    loan_purpose: Optional[str] = None
+    tenure_months: Optional[int] = 12
 
 
 class ApplicationResponse(BaseModel):

@@ -8,8 +8,7 @@ router = APIRouter()
 
 PIPELINE_STAGES = [
     "lead_capture", "lead_qualification", "identity_verification",
-    "credit_assessment", "fraud_detection", "compliance",
-    "document_collection", "sanction_processing", "disbursement",
+    "credit_assessment", "art_negotiation", "enach", "esign",
 ]
 
 
@@ -88,7 +87,7 @@ async def get_agent_metrics():
 async def get_disbursement_metrics():
     db = SessionLocal()
     try:
-        disbursed = db.query(Application).filter(Application.status == "disbursed").all()
+        disbursed = db.query(Application).filter(Application.status == "completed").all()
         total_count = len(disbursed)
         total_amount = sum(a.loan_amount for a in disbursed)
         return {
