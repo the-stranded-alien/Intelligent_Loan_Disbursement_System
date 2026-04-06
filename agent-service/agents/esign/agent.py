@@ -31,11 +31,31 @@ def _render_prompt(state: ApplicationState) -> str:
     )
 
 
+def _publish_completed(application_id: str, stage_results: dict):
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.completed",
+        payload={
+            "application_id": application_id,
+            "stage": "esign",
+            "stage_results": stage_results,
+        },
+    )
+
+
 async def run_esign(state: ApplicationState) -> ApplicationState:
     """
     Node 7: esign
     Simulates Aadhaar/OTP e-sign of the loan agreement. Terminal node.
     """
+    application_id = state.get("application_id")
+
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="node.started",
+        payload={"application_id": application_id, "stage": "esign"},
+    )
+
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     prompt = _render_prompt(state)
 
@@ -66,22 +86,16 @@ async def run_esign(state: ApplicationState) -> ApplicationState:
                 },
             },
         }
-        event_publisher.publish(
-            stream="loan:events",
-            event_type="node.completed",
-            payload={
-                "application_id": state.get("application_id"),
-                "stage": "esign",
-                "stage_results": updated_state["stage_results"],
-            },
-        )
+        _publish_completed(application_id, updated_state["stage_results"])
         return updated_state
 
     except Exception as e:
-        logger.error("esign failed for %s: %s", state.get("application_id"), e)
-        return {
+        logger.error("esign failed for %s: %s", application_id, e)
+        error_state = {
             **state,
             "current_stage": "esign",
             "esign_status": "failed",
             "pipeline_errors": [*state.get("pipeline_errors", []), f"esign: {e}"],
         }
+        _publish_completed(application_id, error_state.get("stage_results", {}))
+        return error_state
