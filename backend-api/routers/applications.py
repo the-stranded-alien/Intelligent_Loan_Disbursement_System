@@ -17,8 +17,15 @@ class ApplicationCreate(BaseModel):
     email: str
     pan_number: str
     date_of_birth: str | None = None
+    # Address / residency
+    city: str | None = None
+    state: str | None = None
+    residential_status: str | None = None   # owned | rented | family
+    years_at_current_address: int | None = None
     # Financial profile
     employment_type: str | None = "salaried"
+    employer_name: str | None = None
+    years_in_current_job: int | None = None
     monthly_income: float | None = 0.0
     existing_emi_amount: float | None = 0.0
     bank_account_number: str | None = None
@@ -40,7 +47,13 @@ async def create_application(payload: ApplicationCreate):
             email=payload.email,
             pan_number=payload.pan_number,
             date_of_birth=payload.date_of_birth,
+            city=payload.city,
+            state=payload.state,
+            residential_status=payload.residential_status,
+            years_at_current_address=payload.years_at_current_address,
             employment_type=payload.employment_type or "salaried",
+            employer_name=payload.employer_name,
+            years_in_current_job=payload.years_in_current_job,
             monthly_income=payload.monthly_income or 0.0,
             existing_emi_amount=payload.existing_emi_amount or 0.0,
             bank_account_number=payload.bank_account_number,
@@ -67,7 +80,13 @@ async def create_application(payload: ApplicationCreate):
                 "email": app.email,
                 "pan_number": app.pan_number,
                 "date_of_birth": app.date_of_birth or "",
+                "city": app.city or "",
+                "state": app.state or "",
+                "residential_status": app.residential_status or "",
+                "years_at_current_address": app.years_at_current_address or 0,
                 "employment_type": app.employment_type or "salaried",
+                "employer_name": app.employer_name or "",
+                "years_in_current_job": app.years_in_current_job or 0,
                 "monthly_income": app.monthly_income or 0.0,
                 "existing_emi_amount": app.existing_emi_amount or 0.0,
                 "bank_account_number": app.bank_account_number or "",
@@ -187,7 +206,13 @@ async def get_application(application_id: str):
             "email": app.email,
             "pan_number": app.pan_number,
             "date_of_birth": app.date_of_birth,
+            "city": app.city,
+            "state": app.state,
+            "residential_status": app.residential_status,
+            "years_at_current_address": app.years_at_current_address,
             "employment_type": app.employment_type,
+            "employer_name": app.employer_name,
+            "years_in_current_job": app.years_in_current_job,
             "monthly_income": app.monthly_income,
             "existing_emi_amount": app.existing_emi_amount,
             "bank_account_number": app.bank_account_number,

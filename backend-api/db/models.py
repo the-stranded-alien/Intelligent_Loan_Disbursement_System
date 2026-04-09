@@ -18,7 +18,13 @@ class Application(Base):
     email = Column(String, nullable=False)
     pan_number = Column(String, nullable=False)
     date_of_birth = Column(String)                    # YYYY-MM-DD
+    city = Column(String)
+    state = Column(String)
+    residential_status = Column(String)               # owned | rented | family
+    years_at_current_address = Column(Integer)
     employment_type = Column(String, default="salaried")  # salaried | self_employed | business
+    employer_name = Column(String)
+    years_in_current_job = Column(Integer)
     monthly_income = Column(Float, default=0.0)
     existing_emi_amount = Column(Float, default=0.0)
     bank_account_number = Column(String)

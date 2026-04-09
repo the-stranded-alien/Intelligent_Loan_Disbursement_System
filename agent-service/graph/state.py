@@ -12,7 +12,13 @@ class ApplicationState(TypedDict, total=False):
     email: str
     pan_number: str
     date_of_birth: str          # YYYY-MM-DD
+    city: str
+    state: str
+    residential_status: str     # owned | rented | family
+    years_at_current_address: int
     employment_type: str        # salaried | self_employed | business
+    employer_name: str
+    years_in_current_job: int
     monthly_income: float       # declared monthly income in ₹
     existing_emi_amount: float  # current monthly EMI obligations in ₹
 

@@ -10,8 +10,15 @@ class ApplicationCreate(BaseModel):
     email: str
     pan_number: str
     date_of_birth: Optional[str] = None
+    # Address / residency
+    city: Optional[str] = None
+    state: Optional[str] = None
+    residential_status: Optional[str] = None
+    years_at_current_address: Optional[int] = None
     # Financial profile
     employment_type: Optional[str] = "salaried"
+    employer_name: Optional[str] = None
+    years_in_current_job: Optional[int] = None
     monthly_income: Optional[float] = 0.0
     existing_emi_amount: Optional[float] = 0.0
     bank_account_number: Optional[str] = None

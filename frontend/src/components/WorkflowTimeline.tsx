@@ -38,9 +38,11 @@ const STAGES = [
 // Stage-specific fields to surface in the dropdown
 const STAGE_FIELDS: Record<string, Array<{ key: string; label: string; type: 'text' | 'decision' | 'amount' | 'score' | 'bool' | 'percent' }>> = {
   lead_capture: [
-    { key: 'eligibility_result', label: 'Decision',        type: 'decision' },
-    { key: 'eligibility_reason', label: 'Reason',          type: 'text' },
-    { key: 'applicant_age',      label: 'Age',             type: 'text' },
+    { key: 'eligibility_result',      label: 'Decision',              type: 'decision' },
+    { key: 'eligibility_reason',      label: 'Reason',                type: 'text' },
+    { key: 'applicant_age',           label: 'Age',                   type: 'text' },
+    { key: 'residential_stability',   label: 'Residential Stability', type: 'decision' },
+    { key: 'employment_stability',    label: 'Employment Stability',  type: 'decision' },
   ],
   lead_qualification: [
     { key: 'qualification_result',  label: 'Decision',          type: 'decision' },

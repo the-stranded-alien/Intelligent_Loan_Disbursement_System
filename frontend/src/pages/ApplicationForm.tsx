@@ -14,15 +14,21 @@ import { cn } from '@/lib/utils'
 // ── Schemas ────────────────────────────────────────────────────────────────
 
 const personalSchema = z.object({
-  full_name:     z.string().min(2, 'Name must be at least 2 characters'),
-  email:         z.string().email('Invalid email address'),
-  phone:         z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
-  pan_number:    z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Enter a valid PAN (e.g. ABCDE1234F)'),
-  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter date as YYYY-MM-DD'),
+  full_name:                z.string().min(2, 'Name must be at least 2 characters'),
+  email:                    z.string().email('Invalid email address'),
+  phone:                    z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
+  pan_number:               z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Enter a valid PAN (e.g. ABCDE1234F)'),
+  date_of_birth:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter date as YYYY-MM-DD'),
+  city:                     z.string().min(2, 'Enter your city'),
+  state:                    z.string().min(2, 'Select your state'),
+  residential_status:       z.enum(['owned', 'rented', 'family'], { errorMap: () => ({ message: 'Select residential status' }) }),
+  years_at_current_address: z.number({ invalid_type_error: 'Enter years at address' }).min(0).max(99),
 })
 
 const financialSchema = z.object({
   employment_type:     z.enum(['salaried', 'self_employed', 'business'], { errorMap: () => ({ message: 'Select employment type' }) }),
+  employer_name:       z.string().optional(),
+  years_in_current_job: z.number({ invalid_type_error: 'Enter years in job' }).min(0).max(50).optional(),
   monthly_income:      z.number({ invalid_type_error: 'Enter your monthly income' }).min(15000, 'Minimum income ₹15,000'),
   existing_emi_amount: z.number({ invalid_type_error: 'Enter 0 if none' }).min(0),
   bank_account_number: z.string().regex(/^\d{9,18}$/, 'Enter valid account number (9–18 digits)'),
@@ -44,9 +50,21 @@ type LoanData       = z.infer<typeof loanSchema>
 const PURPOSES = ['Home Renovation', 'Education', 'Medical', 'Business', 'Vehicle', 'Wedding', 'Travel', 'Other']
 const TENURES  = [6, 12, 18, 24, 36, 48, 60, 84]
 const EMPLOYMENT_TYPES = [
-  { value: 'salaried',     label: 'Salaried' },
+  { value: 'salaried',      label: 'Salaried' },
   { value: 'self_employed', label: 'Self-Employed' },
-  { value: 'business',     label: 'Business Owner' },
+  { value: 'business',      label: 'Business Owner' },
+]
+const RESIDENTIAL_TYPES = [
+  { value: 'owned',  label: 'Owned' },
+  { value: 'rented', label: 'Rented' },
+  { value: 'family', label: 'Family' },
+]
+const INDIAN_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan',
+  'Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal',
+  'Delhi','Jammu & Kashmir','Ladakh','Chandigarh','Puducherry',
 ]
 
 const STEPS = [
@@ -278,6 +296,51 @@ export default function ApplicationForm() {
                 <input {...personalForm.register('date_of_birth')} type="date" className="input" />
                 <Err msg={personalForm.formState.errors.date_of_birth?.message} />
               </div>
+              <div>
+                <label className="label">City</label>
+                <input {...personalForm.register('city')} className="input" placeholder="Mumbai" />
+                <Err msg={personalForm.formState.errors.city?.message} />
+              </div>
+              <div>
+                <label className="label">State</label>
+                <select {...personalForm.register('state')} className="input">
+                  <option value="">Select state…</option>
+                  {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <Err msg={personalForm.formState.errors.state?.message} />
+              </div>
+              <div className="col-span-2">
+                <label className="label">Residential Status</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {RESIDENTIAL_TYPES.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => personalForm.setValue('residential_status', value as PersonalData['residential_status'])}
+                      className={cn(
+                        'px-3 py-2 rounded-xl text-xs font-semibold border transition-all duration-150',
+                        personalForm.watch('residential_status') === value
+                          ? 'bg-gradient-to-r from-brand-600 to-brand-500 text-white border-transparent shadow-sm'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <Err msg={personalForm.formState.errors.residential_status?.message} />
+              </div>
+              <div className="col-span-2">
+                <label className="label">Years at Current Address</label>
+                <input
+                  type="number"
+                  {...personalForm.register('years_at_current_address', { valueAsNumber: true })}
+                  className="input"
+                  placeholder="3"
+                  min={0}
+                />
+                <Err msg={personalForm.formState.errors.years_at_current_address?.message} />
+              </div>
             </div>
             <button type="submit" className="btn-primary w-full flex items-center justify-center gap-2">
               Continue <ArrowRight size={14} />
@@ -310,6 +373,27 @@ export default function ApplicationForm() {
               <Err msg={financialForm.formState.errors.employment_type?.message} />
             </div>
             <div className="grid grid-cols-2 gap-4">
+              {/* Conditional employer fields for salaried/business */}
+              {financialForm.watch('employment_type') !== 'self_employed' && (
+                <>
+                  <div className="col-span-2">
+                    <label className="label">Employer / Company Name</label>
+                    <input {...financialForm.register('employer_name')} className="input" placeholder="Acme Corp" />
+                    <Err msg={financialForm.formState.errors.employer_name?.message} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label">Years in Current Job</label>
+                    <input
+                      type="number"
+                      {...financialForm.register('years_in_current_job', { valueAsNumber: true })}
+                      className="input"
+                      placeholder="2"
+                      min={0}
+                    />
+                    <Err msg={financialForm.formState.errors.years_in_current_job?.message} />
+                  </div>
+                </>
+              )}
               <div>
                 <label className="label">Monthly Income (₹)</label>
                 <input
@@ -417,22 +501,27 @@ export default function ApplicationForm() {
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Personal</p>
               <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl overflow-hidden border border-slate-200/60 dark:border-slate-700/50">
-                <ReviewRow label="Full Name"     value={personal.full_name} />
-                <ReviewRow label="Email"         value={personal.email} />
-                <ReviewRow label="Mobile"        value={personal.phone} />
-                <ReviewRow label="PAN"           value={personal.pan_number} />
-                <ReviewRow label="Date of Birth" value={personal.date_of_birth} last />
+                <ReviewRow label="Full Name"        value={personal.full_name} />
+                <ReviewRow label="Email"            value={personal.email} />
+                <ReviewRow label="Mobile"           value={personal.phone} />
+                <ReviewRow label="PAN"              value={personal.pan_number} />
+                <ReviewRow label="Date of Birth"    value={personal.date_of_birth} />
+                <ReviewRow label="City / State"     value={`${personal.city}, ${personal.state}`} />
+                <ReviewRow label="Residence"        value={personal.residential_status} />
+                <ReviewRow label="Years at Address" value={`${personal.years_at_current_address} yr${personal.years_at_current_address !== 1 ? 's' : ''}`} last />
               </div>
             </div>
             {/* Financial */}
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Financial</p>
               <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl overflow-hidden border border-slate-200/60 dark:border-slate-700/50">
-                <ReviewRow label="Employment"      value={EMPLOYMENT_TYPES.find(e => e.value === financial.employment_type)?.label ?? financial.employment_type} />
-                <ReviewRow label="Monthly Income"  value={`₹${financial.monthly_income.toLocaleString('en-IN')}`} />
-                <ReviewRow label="Existing EMI"    value={`₹${financial.existing_emi_amount.toLocaleString('en-IN')}`} />
-                <ReviewRow label="Bank Account"    value={financial.bank_account_number} />
-                <ReviewRow label="IFSC"            value={financial.ifsc_code} last />
+                <ReviewRow label="Employment"     value={EMPLOYMENT_TYPES.find(e => e.value === financial.employment_type)?.label ?? financial.employment_type} />
+                {financial.employer_name && <ReviewRow label="Employer"        value={financial.employer_name} />}
+                {financial.years_in_current_job != null && <ReviewRow label="Years in Job"   value={`${financial.years_in_current_job} yr${financial.years_in_current_job !== 1 ? 's' : ''}`} />}
+                <ReviewRow label="Monthly Income" value={`₹${financial.monthly_income.toLocaleString('en-IN')}`} />
+                <ReviewRow label="Existing EMI"   value={`₹${financial.existing_emi_amount.toLocaleString('en-IN')}`} />
+                <ReviewRow label="Bank Account"   value={financial.bank_account_number} />
+                <ReviewRow label="IFSC"           value={financial.ifsc_code} last />
               </div>
             </div>
             {/* Loan */}
