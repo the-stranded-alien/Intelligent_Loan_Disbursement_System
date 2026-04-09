@@ -30,7 +30,7 @@ const financialSchema = z.object({
 })
 
 const loanSchema = z.object({
-  loan_amount:   z.number({ invalid_type_error: 'Enter a valid amount' }).min(10000, 'Minimum ₹10,000').max(5000000, 'Maximum ₹50L'),
+  loan_amount:   z.number({ invalid_type_error: 'Enter a valid amount' }).min(1000, 'Minimum ₹1,000').max(5000000, 'Maximum ₹50L'),
   loan_purpose:  z.string().min(3, 'Please select a purpose'),
   tenure_months: z.number({ invalid_type_error: 'Select tenure' }).min(6).max(84),
 })
