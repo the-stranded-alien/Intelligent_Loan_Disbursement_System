@@ -1,0 +1,112 @@
+"""
+Applications Monitoring Agent
+
+Scans all open applications and flags any that have had no update within
+configurable time thresholds. Flagged applications are published to the
+outreach.required Redis stream for the Outreach Agent to process.
+"""
+
+import logging
+from datetime import datetime, timezone, timedelta
+
+from config.settings import settings
+from services.event_publisher import event_publisher
+
+logger = logging.getLogger(__name__)
+
+# Staleness thresholds per status
+STALE_THRESHOLDS: dict[str, int] = {
+    "pending":        2,    # hours — submitted but pipeline never started
+    "processing":     1,    # hours — pipeline running but no update for 1h (likely stuck)
+    "pending_review": 24,   # hours — HITL requested but RM hasn't acted
+}
+
+# Max outreach attempts before we stop (checked via audit_log count)
+MAX_OUTREACH_ATTEMPTS = 4
+
+
+def run_monitoring_scan() -> list[dict]:
+    """
+    Scan all open applications for staleness.
+    Returns a list of stale application dicts — each will trigger an outreach.
+    Publishes outreach.required events for applications that qualify.
+    """
+    # Import here to avoid circular imports at module load time
+    from db.session import SessionLocal, Application, AuditLog
+    from sqlalchemy import func
+
+    db: Session = SessionLocal()
+    stale_apps = []
+
+    try:
+        now = datetime.now(timezone.utc)
+
+        for status, hours in STALE_THRESHOLDS.items():
+            cutoff = now - timedelta(hours=hours)
+
+            apps = (
+                db.query(Application)
+                .filter(
+                    Application.status == status,
+                    Application.updated_at < cutoff,
+                )
+                .all()
+            )
+
+            for app in apps:
+                # Check how many outreach events already sent for this application
+                outreach_count = (
+                    db.query(func.count(AuditLog.id))
+                    .filter(
+                        AuditLog.application_id == app.id,
+                        AuditLog.event_type == "outreach.sent",
+                    )
+                    .scalar()
+                    or 0
+                )
+
+                if outreach_count >= MAX_OUTREACH_ATTEMPTS:
+                    logger.info(
+                        "Skipping %s — already %d outreach attempts sent",
+                        app.id, outreach_count,
+                    )
+                    continue
+
+                updated_at = app.updated_at
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
+                hours_stale = round((now - updated_at).total_seconds() / 3600, 1)
+
+                stale_info = {
+                    "application_id": app.id,
+                    "full_name": app.full_name,
+                    "email": app.email,
+                    "phone": app.phone,
+                    "loan_amount": app.loan_amount,
+                    "loan_purpose": app.loan_purpose or "",
+                    "status": app.status,
+                    "current_stage": app.current_stage or "",
+                    "hours_stale": hours_stale,
+                    "outreach_attempt": outreach_count + 1,
+                }
+
+                stale_apps.append(stale_info)
+
+                event_publisher.publish(
+                    stream="loan:events",
+                    event_type="outreach.required",
+                    payload=stale_info,
+                )
+
+                logger.info(
+                    "Flagged stale application %s (status=%s, stale=%.1fh, attempt=%d)",
+                    app.id, status, hours_stale, outreach_count + 1,
+                )
+
+    except Exception as e:
+        logger.error("Monitoring scan failed: %s", e)
+    finally:
+        db.close()
+
+    logger.info("Monitoring scan complete — %d stale applications found", len(stale_apps))
+    return stale_apps

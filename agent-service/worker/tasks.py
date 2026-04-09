@@ -172,3 +172,20 @@ def retry_disbursement(self: Task, application_id: str) -> dict:
     """Retry disbursement with exponential back-off."""
     # TODO: implement in a later step
     pass
+
+
+@celery_app.task(
+    name="agent.monitoring_scan",
+    queue="agent",
+)
+def monitoring_scan() -> dict:
+    """
+    Scheduled task: scan all open applications for staleness and publish
+    outreach.required events for any that haven't been updated within threshold.
+
+    Run by Celery Beat every hour.
+    """
+    from agents.monitoring.agent import run_monitoring_scan
+    stale = run_monitoring_scan()
+    logger.info("monitoring_scan: %d stale applications flagged", len(stale))
+    return {"stale_count": len(stale), "applications": [a["application_id"] for a in stale]}

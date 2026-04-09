@@ -260,6 +260,27 @@ services:
       redis:
         condition: service_healthy
 
+  agent-beat:
+    build:
+      context: ./agent-service
+      dockerfile: Dockerfile
+    container_name: loan-agent-beat
+    restart: unless-stopped
+    command: celery -A worker.celery_app beat --loglevel=info --scheduler celery.beat.PersistentScheduler
+    environment:
+      <<: *common-env
+      HITL_THRESHOLD: ${HITL_THRESHOLD:-200000}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      BACKEND_API_URL: ${BACKEND_API_URL:-http://backend-api:8000}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:8002}
+    networks:
+      - loan-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ── Frontend ───────────────────────────────────────────────
 
   frontend:

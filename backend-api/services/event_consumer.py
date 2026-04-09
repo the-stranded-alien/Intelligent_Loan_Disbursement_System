@@ -144,6 +144,35 @@ class EventConsumer:
                 "data": payload,
             })
 
+        elif event_type == "outreach.required":
+            application_id = payload.get("application_id")
+            db = SessionLocal()
+            try:
+                app = db.query(Application).filter(Application.id == application_id).first()
+                if app:
+                    db.add(AuditLog(
+                        id=str(uuid.uuid4()),
+                        application_id=application_id,
+                        event_type="outreach.triggered",
+                        actor="monitoring-agent",
+                        payload={
+                            "hours_stale": payload.get("hours_stale"),
+                            "status": payload.get("status"),
+                            "current_stage": payload.get("current_stage"),
+                            "outreach_attempt": payload.get("outreach_attempt"),
+                        },
+                        created_at=datetime.now(timezone.utc),
+                    ))
+                    db.commit()
+            finally:
+                db.close()
+
+            await websocket_manager.broadcast(application_id, {
+                "event": "outreach.required",
+                "stage": payload.get("current_stage"),
+                "hours_stale": payload.get("hours_stale"),
+            })
+
         await self._client.xack(self.STREAM, self.GROUP, msg_id)
 
     async def close(self):

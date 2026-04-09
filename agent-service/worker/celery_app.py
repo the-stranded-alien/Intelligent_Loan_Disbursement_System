@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 from config.settings import settings
 
 celery_app = Celery(
@@ -18,4 +19,11 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
+    beat_schedule={
+        # Run monitoring scan every hour at :00
+        "monitoring-scan-hourly": {
+            "task": "agent.monitoring_scan",
+            "schedule": crontab(minute=0),
+        },
+    },
 )
