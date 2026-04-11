@@ -145,7 +145,10 @@ export default function AssessmentChat() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ applicant_data: appData }),
           })
-          if (!res.ok) throw new Error('Failed to start assessment session')
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.detail || `Assessment service error (HTTP ${res.status})`)
+          }
           const data = await res.json()
           sid = data.session_id
           opening = data.opening

@@ -41,10 +41,10 @@ def _build_system_prompt(applicant_data: dict) -> str:
     env.filters["format_inr"] = _format_inr
     template = env.get_template("assessment.j2")
 
-    monthly_income = float(applicant_data.get("monthly_income", 0))
-    loan_amount = float(applicant_data.get("loan_amount", 0))
-    tenure = int(applicant_data.get("tenure_months", 12))
-    existing_emi = float(applicant_data.get("existing_emi_amount", 0))
+    monthly_income = float(applicant_data.get("monthly_income") or 0)
+    loan_amount = float(applicant_data.get("loan_amount") or 0)
+    tenure = int(applicant_data.get("tenure_months") or 12)
+    existing_emi = float(applicant_data.get("existing_emi_amount") or 0)
 
     # Rough EMI estimate: flat interest ~12% p.a.
     rate_monthly = 0.12 / 12
@@ -58,6 +58,14 @@ def _build_system_prompt(applicant_data: dict) -> str:
 
     return template.render(
         **applicant_data,
+        # Ensure template-critical fields are never None
+        full_name=applicant_data.get("full_name") or "",
+        loan_purpose=applicant_data.get("loan_purpose") or "general purpose",
+        employment_type=applicant_data.get("employment_type") or "salaried",
+        monthly_income=monthly_income,
+        existing_emi_amount=existing_emi,
+        loan_amount=loan_amount,
+        tenure_months=tenure,
         estimated_emi=estimated_emi,
         total_obligations=total_obligations,
         dti_ratio=dti_ratio,
