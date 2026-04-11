@@ -169,9 +169,75 @@ def resume_pipeline(self: Task, application_id: str, hitl_decision: dict) -> dic
     queue="agent",
 )
 def retry_disbursement(self: Task, application_id: str) -> dict:
-    """Retry disbursement with exponential back-off."""
-    # TODO: implement in a later step
-    pass
+    """
+    Retry disbursement with exponential back-off.
+    Schedule: immediate → 1h → 4h → 24h (controlled by max_retries + countdown).
+
+    Simulates an external bank transfer API call. On transient failure it
+    re-schedules itself with increasing delay; on final success it publishes
+    a pipeline.completed event with final_status='disbursed'.
+    """
+    attempt = self.request.retries  # 0-indexed
+
+    logger.info(
+        "retry_disbursement attempt %d/%d for %s",
+        attempt + 1, settings.disbursement_max_retries, application_id,
+    )
+
+    # Simulate bank API call — in production replace with real HTTP call.
+    import random
+    # First attempt succeeds 70% of the time; subsequent retries succeed 95%.
+    success_prob = 0.70 if attempt == 0 else 0.95
+    disbursement_ok = random.random() < success_prob
+
+    if not disbursement_ok:
+        # Exponential back-off: 0 → 3600s → 14400s → 86400s
+        countdown = [0, 3600, 14400, 86400][min(attempt, 3)]
+        logger.warning(
+            "Disbursement failed for %s (attempt %d) — retrying in %ds",
+            application_id, attempt + 1, countdown,
+        )
+        raise self.retry(countdown=countdown, exc=RuntimeError("Bank transfer failed"))
+
+    # Success — publish disbursed event and update application status via event bus
+    disbursement_ref = f"DISB-{application_id[:8].upper()}-{attempt + 1:02d}"
+    event_publisher.publish(
+        stream="loan:events",
+        event_type="pipeline.completed",
+        payload={
+            "application_id": application_id,
+            "stage": "disbursement",
+            "final_status": "disbursed",
+            "disbursement_ref": disbursement_ref,
+            "attempt": attempt + 1,
+        },
+    )
+    logger.info("Disbursement succeeded for %s ref=%s", application_id, disbursement_ref)
+    return {"application_id": application_id, "disbursement_ref": disbursement_ref}
+
+
+@celery_app.task(
+    name="agent.run_outreach",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=300,
+    queue="agent",
+)
+def run_outreach(self: Task, payload: dict) -> dict:
+    """
+    Generate and dispatch a personalised follow-up message for a stale application.
+    Triggered directly by the monitoring agent.
+    """
+    import asyncio
+    from agents.outreach.agent import run_outreach as _run_outreach
+
+    try:
+        result = asyncio.run(_run_outreach(payload))
+        logger.info("Outreach sent for %s (attempt %d)", payload.get("application_id"), payload.get("outreach_attempt", 1))
+        return result
+    except Exception as exc:
+        logger.error("Outreach task failed for %s: %s", payload.get("application_id"), exc)
+        raise self.retry(exc=exc)
 
 
 @celery_app.task(

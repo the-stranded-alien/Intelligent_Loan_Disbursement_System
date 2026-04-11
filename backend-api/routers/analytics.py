@@ -1,8 +1,8 @@
 from fastapi import APIRouter
-from sqlalchemy import func
+from sqlalchemy import func, desc
 
 from db.session import SessionLocal
-from db.models import Application
+from db.models import Application, AuditLog
 
 router = APIRouter()
 
@@ -78,6 +78,91 @@ async def get_agent_metrics():
             "stages": stages,
             "pending_hitl_review": pending_hitl,
             "avg_loan_amount": round(float(avg_loan), 2),
+        }
+    finally:
+        db.close()
+
+
+@router.get("/background-agents")
+async def get_background_agent_activity():
+    """
+    Returns recent activity for all three background agents:
+    - Monitoring: outreach.triggered events (app was flagged as stale)
+    - Outreach: outreach.sent events (message actually dispatched)
+    - Pipeline: stage.*.completed events (node completions across all apps)
+    """
+    db = SessionLocal()
+    try:
+        # ── Monitoring agent ──────────────────────────────────────────────────
+        monitoring_logs = (
+            db.query(AuditLog, Application.full_name)
+            .join(Application, AuditLog.application_id == Application.id, isouter=True)
+            .filter(AuditLog.event_type == "outreach.triggered")
+            .order_by(desc(AuditLog.created_at))
+            .limit(20)
+            .all()
+        )
+        monitoring_total = db.query(func.count(AuditLog.id)).filter(
+            AuditLog.event_type == "outreach.triggered"
+        ).scalar() or 0
+
+        # ── Outreach agent ────────────────────────────────────────────────────
+        outreach_logs = (
+            db.query(AuditLog, Application.full_name)
+            .join(Application, AuditLog.application_id == Application.id, isouter=True)
+            .filter(AuditLog.event_type == "outreach.sent")
+            .order_by(desc(AuditLog.created_at))
+            .limit(20)
+            .all()
+        )
+        outreach_total = db.query(func.count(AuditLog.id)).filter(
+            AuditLog.event_type == "outreach.sent"
+        ).scalar() or 0
+
+        # ── Pipeline node completions ─────────────────────────────────────────
+        pipeline_logs = (
+            db.query(AuditLog, Application.full_name)
+            .join(Application, AuditLog.application_id == Application.id, isouter=True)
+            .filter(AuditLog.event_type.like("stage.%.completed"))
+            .order_by(desc(AuditLog.created_at))
+            .limit(30)
+            .all()
+        )
+        pipeline_total = db.query(func.count(AuditLog.id)).filter(
+            AuditLog.event_type.like("stage.%.completed")
+        ).scalar() or 0
+
+        # ── Assessment: apps currently awaiting chat ──────────────────────────
+        awaiting_assessment = db.query(func.count(Application.id)).filter(
+            Application.status == "info_requested"
+        ).scalar() or 0
+
+        def fmt_log(log, full_name):
+            return {
+                "application_id": log.application_id,
+                "full_name": full_name or "Unknown",
+                "event_type": log.event_type,
+                "actor": log.actor,
+                "payload": log.payload or {},
+                "at": log.created_at.isoformat() if log.created_at else None,
+            }
+
+        return {
+            "monitoring": {
+                "total_flagged": monitoring_total,
+                "recent": [fmt_log(l, n) for l, n in monitoring_logs],
+            },
+            "outreach": {
+                "total_sent": outreach_total,
+                "recent": [fmt_log(l, n) for l, n in outreach_logs],
+            },
+            "pipeline": {
+                "total_node_completions": pipeline_total,
+                "recent": [fmt_log(l, n) for l, n in pipeline_logs],
+            },
+            "assessment": {
+                "awaiting_chat": awaiting_assessment,
+            },
         }
     finally:
         db.close()

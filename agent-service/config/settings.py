@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     hitl_threshold: int = 200_000
     disbursement_max_retries: int = 4
 
+    # LangSmith tracing (optional)
+    langchain_tracing_v2: str = "false"
+    langchain_api_key: str = ""
+    langchain_project: str = "loan-disbursement-system"
+
     # App
     environment: str = "development"
     log_level: str = "INFO"

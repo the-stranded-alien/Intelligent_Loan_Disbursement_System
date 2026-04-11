@@ -98,6 +98,10 @@ def run_monitoring_scan() -> list[dict]:
                     payload=stale_info,
                 )
 
+                # Directly enqueue the outreach Celery task (same worker process)
+                from worker.tasks import run_outreach  # noqa: PLC0415
+                run_outreach.delay(stale_info)
+
                 logger.info(
                     "Flagged stale application %s (status=%s, stale=%.1fh, attempt=%d)",
                     app.id, status, hours_stale, outreach_count + 1,

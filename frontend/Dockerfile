@@ -20,6 +20,7 @@ RUN chmod +x /entrypoint.sh
 
 # Defaults — Railway env vars override these at runtime
 ENV BACKEND_URL=http://localhost:8000
+ENV AGENT_SERVICE_URL=http://localhost:8001
 ENV PORT=80
 
 EXPOSE 80

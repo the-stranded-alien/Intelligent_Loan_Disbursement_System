@@ -3,9 +3,10 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-from config.settings import settings
 from consumers.event_consumer import AgentEventConsumer
 from consumers.hitl_consumer import HitlDecisionConsumer
+from routers import assessment, negotiation
+from services.tracing import configure_tracing
 
 logger = logging.getLogger(__name__)
 consumer = AgentEventConsumer()
@@ -14,6 +15,7 @@ hitl_consumer = HitlDecisionConsumer()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_tracing()
     await consumer.connect()
     await hitl_consumer.connect()
     task = asyncio.create_task(consumer.consume())
@@ -33,6 +35,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.include_router(assessment.router, prefix="/api/v1/assessment", tags=["assessment"])
+app.include_router(negotiation.router, prefix="/api/v1/negotiation", tags=["negotiation"])
 
 
 @app.get("/health", tags=["health"])

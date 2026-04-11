@@ -6,6 +6,9 @@ export interface PipelineEvent {
   stage?: string
   status?: 'pending' | 'in_progress' | 'completed' | 'failed'
   timestamp?: string
+  session_id?: string
+  opening?: string
+  reason?: string
   data?: Record<string, unknown>
 }
 

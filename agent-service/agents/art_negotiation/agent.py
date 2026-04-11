@@ -8,6 +8,7 @@ from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
 from services.json_parser import parse_llm_json
+from services.llm_utils import call_llm
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,8 @@ async def run_art_negotiation(state: ApplicationState) -> ApplicationState:
     prompt = _render_prompt(state)
 
     try:
-        response = await client.messages.create(
+        response, metrics = await call_llm(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
@@ -95,6 +97,9 @@ async def run_art_negotiation(state: ApplicationState) -> ApplicationState:
                     "selected_option": result.get("selected_option"),
                     "offer_count": len(result.get("negotiation_offers", [])),
                     "planner_notes": result.get("planner_notes"),
+                    "offers": result.get("negotiation_offers", []),
+                    "recommended_option": result.get("selected_option"),
+                    **metrics,
                 },
             },
         }

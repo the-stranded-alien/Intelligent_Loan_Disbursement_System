@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Search, RefreshCw, Banknote, Calendar, User, Copy, Check } from 'lucide-react'
+import { Search, RefreshCw, Banknote, Calendar, User, Copy, Check, CheckCircle2, XCircle, Percent, MessageSquare, Upload, FileText, AlertCircle } from 'lucide-react'
 import WorkflowTimeline from '@/components/WorkflowTimeline'
 import NotificationFeed from '@/components/NotificationFeed'
 import { useWorkflowSocket } from '@/hooks/useWorkflowSocket'
@@ -37,6 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
   completed:      'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
   processing:     'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-400',
   pending_review: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
+  info_requested: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400',
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -62,6 +63,16 @@ export default function StatusTracker() {
   const [copied, setCopied]   = useState(false)
   const [activeStage, setActiveStage] = useState<string | null>(null)
 
+  // Auto-started assessment session (from assessment_ready WS event)
+  const [autoSessionId, setAutoSessionId] = useState<string | null>(null)
+
+  // Document upload state
+  const [uploadFile, setUploadFile]     = useState<File | null>(null)
+  const [uploadType, setUploadType]     = useState('salary_slip')
+  const [uploading, setUploading]       = useState(false)
+  const [uploadMsg, setUploadMsg]       = useState('')
+  const [uploadError, setUploadError]   = useState('')
+
   // ── Live WebSocket — owned here and passed to children ──────────────────
   const { events: wsEvents, connected: wsConnected } = useWorkflowSocket(appId || undefined)
   const lastWsEvent = useRef<typeof wsEvents[0] | null>(null)
@@ -83,6 +94,10 @@ export default function StatusTracker() {
           .then(setEvents)
           .catch(() => {})
       }
+    } else if (latest.event === 'info_requested') {
+      setStatus(s => s ? { ...s, status: 'info_requested' } : s)
+    } else if (latest.event === 'assessment_ready' && latest.session_id) {
+      setAutoSessionId(latest.session_id as string)
     } else if (latest.event === 'pipeline.completed' || latest.event === 'hitl.requested') {
       // Full refetch to get accurate final status
       if (appId) fetchStatus(appId)
@@ -131,6 +146,30 @@ export default function StatusTracker() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
+  }
+
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault()
+    if (!uploadFile || !appId) return
+    setUploading(true)
+    setUploadMsg('')
+    setUploadError('')
+    try {
+      const form = new FormData()
+      form.append('file', uploadFile)
+      form.append('document_type', uploadType)
+      const res = await fetch(`/api/v1/documents/${appId}/upload`, { method: 'POST', body: form })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail || `Upload failed (${res.status})`)
+      }
+      setUploadMsg('Document uploaded successfully.')
+      setUploadFile(null)
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const statusColor = status ? (STATUS_COLORS[status.status] ?? STATUS_COLORS.processing) : ''
@@ -215,7 +254,193 @@ export default function StatusTracker() {
             <span className={cn('badge ml-auto flex-shrink-0', statusColor)}>
               {status.status.replace('_', ' ')}
             </span>
+
+            {status.status === 'pending_review' && (
+              <button
+                onClick={() => navigate(`/assessment/${status.application_id}`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium transition-colors flex-shrink-0"
+              >
+                <MessageSquare size={12} />
+                Start Assessment
+              </button>
+            )}
           </div>
+
+          {/* ── Eligibility banner ── */}
+          {(() => {
+            const leadEvent = events.find(e => e.event === 'stage.lead_capture.completed')
+            if (!leadEvent?.payload?.result) return null
+            const r = leadEvent.payload.result as Record<string, unknown>
+            const eligible = r.eligibility_result === 'eligible'
+            const ineligible = r.eligibility_result === 'ineligible'
+            if (!eligible && !ineligible) return null
+            return eligible ? (
+              <div className="flex items-start gap-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-4 py-3">
+                <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Eligible — KYC Step Next</p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-0.5">
+                    Your application passed initial eligibility. Your identity will be verified next.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl px-4 py-3">
+                <XCircle size={16} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-red-700 dark:text-red-400">Application Not Eligible</p>
+                  {r.eligibility_reason && (
+                    <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">{String(r.eligibility_reason)}</p>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ── Assessment Ready Banner (auto-triggered from Node 2 request_info) ── */}
+          {autoSessionId && (
+            <div className="flex items-center gap-3 bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 rounded-xl px-4 py-3">
+              <MessageSquare size={16} className="text-violet-600 dark:text-violet-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-violet-700 dark:text-violet-400">
+                  Quick chat required
+                </p>
+                <p className="text-xs text-violet-600 dark:text-violet-300 mt-0.5">
+                  Priya, our AI advisor, is ready to clarify a few details about your application.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate(`/assessment/${status.application_id}?session=${autoSessionId}`)}
+                className="flex-shrink-0 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium transition-colors"
+              >
+                Start Chat
+              </button>
+            </div>
+          )}
+
+          {/* ── ART Offers Card ── */}
+          {(() => {
+            const artEvent = events.find(e => e.event === 'stage.art_negotiation.completed')
+            if (!artEvent?.payload?.result) return null
+            const r = artEvent.payload.result as Record<string, unknown>
+            const offers = r.offers as Array<Record<string, unknown>> | undefined
+            if (!offers?.length) return null
+            return (
+              <div className="card p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Percent size={14} className="text-brand-500" />
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Loan Offers</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {offers.map((offer) => {
+                    const opt = String(offer.option ?? '')
+                    const recommended = r.recommended_option === opt
+                    return (
+                      <div
+                        key={opt}
+                        className={cn(
+                          'rounded-xl border p-4 space-y-2 transition-all',
+                          recommended
+                            ? 'border-brand-400 bg-brand-50 dark:bg-brand-500/10 ring-1 ring-brand-400'
+                            : 'border-slate-200 dark:border-slate-700',
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Option {opt}</span>
+                          {recommended && (
+                            <span className="badge bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-400 text-[10px]">
+                              Recommended
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-lg font-bold text-brand-600 dark:text-brand-400">
+                            {Number(offer.interest_rate ?? 0).toFixed(1)}%
+                            <span className="text-xs font-normal text-slate-400 ml-1">p.a.</span>
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {offer.tenure_months} months · ₹{Math.round(Number(offer.emi_amount ?? 0)).toLocaleString('en-IN')}/mo
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ── Document Upload (shown when info is requested or app is processing) ── */}
+          {(status.status === 'info_requested' || status.status === 'processing') && (
+            <div className="card p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Upload size={14} className="text-violet-500" />
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Upload Document</h3>
+              </div>
+
+              {status.status === 'info_requested' && (
+                <div className="flex items-start gap-2 bg-violet-50 dark:bg-violet-500/10 rounded-xl px-3 py-2">
+                  <AlertCircle size={13} className="text-violet-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-violet-600 dark:text-violet-300">
+                    Additional documents are required to continue processing your application.
+                  </p>
+                </div>
+              )}
+
+              <form onSubmit={handleUpload} className="space-y-3">
+                <div className="flex gap-2">
+                  <select
+                    value={uploadType}
+                    onChange={e => setUploadType(e.target.value)}
+                    className="input text-xs py-1.5 flex-1"
+                  >
+                    <option value="salary_slip">Salary Slip</option>
+                    <option value="itr">ITR</option>
+                    <option value="bank_statement">Bank Statement</option>
+                    <option value="pan_card">PAN Card</option>
+                    <option value="aadhaar">Aadhaar</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-4 cursor-pointer hover:border-brand-400 transition-colors">
+                  <FileText size={20} className="text-slate-300 dark:text-slate-600" />
+                  <span className="text-xs text-slate-400">
+                    {uploadFile ? uploadFile.name : 'Click to select file (PDF, JPG, PNG)'}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+
+                {uploadMsg && (
+                  <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 size={13} />
+                    {uploadMsg}
+                  </div>
+                )}
+                {uploadError && (
+                  <div className="flex items-center gap-2 text-xs text-red-500">
+                    <XCircle size={13} />
+                    {uploadError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={!uploadFile || uploading}
+                  className="btn-primary w-full flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                >
+                  {uploading
+                    ? <><RefreshCw size={13} className="animate-spin" /> Uploading…</>
+                    : <><Upload size={13} /> Upload Document</>}
+                </button>
+              </form>
+            </div>
+          )}
 
           {/* Main grid: timeline + live feed */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

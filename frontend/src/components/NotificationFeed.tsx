@@ -1,5 +1,5 @@
 import { useWorkflowSocket, PipelineEvent } from '@/hooks/useWorkflowSocket'
-import { Wifi, WifiOff, Bell, CheckCircle2, Zap, AlertCircle, Info } from 'lucide-react'
+import { Wifi, WifiOff, Bell, CheckCircle2, Zap, AlertCircle, Info, Loader2, Mail, FileQuestion, Bot } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -12,10 +12,15 @@ interface Props {
 // ── Event type config ──────────────────────────────────────────────────────
 
 const EVENT_CONFIG: Record<string, { icon: React.ElementType; color: string; dot: string }> = {
-  'node.completed':     { icon: CheckCircle2, color: 'text-emerald-500', dot: 'bg-emerald-500' },
-  'pipeline.completed': { icon: Zap,          color: 'text-indigo-500',  dot: 'bg-indigo-500'  },
-  'hitl.requested':     { icon: AlertCircle,  color: 'text-amber-500',   dot: 'bg-amber-500'   },
-  'connected':          { icon: Wifi,         color: 'text-brand-500',   dot: 'bg-brand-500'   },
+  'node.started':       { icon: Loader2,       color: 'text-brand-500',   dot: 'bg-brand-500'   },
+  'node.completed':     { icon: CheckCircle2,  color: 'text-emerald-500', dot: 'bg-emerald-500' },
+  'pipeline.completed': { icon: Zap,           color: 'text-indigo-500',  dot: 'bg-indigo-500'  },
+  'hitl.requested':     { icon: AlertCircle,   color: 'text-amber-500',   dot: 'bg-amber-500'   },
+  'outreach.required':  { icon: Mail,          color: 'text-orange-500',  dot: 'bg-orange-500'  },
+  'outreach.sent':      { icon: Mail,          color: 'text-emerald-500', dot: 'bg-emerald-500' },
+  'info_requested':     { icon: FileQuestion,  color: 'text-violet-500',  dot: 'bg-violet-500'  },
+  'assessment_ready':   { icon: Bot,           color: 'text-violet-500',  dot: 'bg-violet-500'  },
+  'connected':          { icon: Wifi,          color: 'text-brand-500',   dot: 'bg-brand-500'   },
 }
 
 const DEFAULT_CONFIG = { icon: Info, color: 'text-slate-400', dot: 'bg-slate-400' }
@@ -39,6 +44,40 @@ function stageLabel(stage?: string): string {
     esign: 'E-Sign',
   }
   return stage ? (MAP[stage] ?? stage) : ''
+}
+
+function eventLabel(e: PipelineEvent): string {
+  switch (e.event) {
+    case 'node.started':      return `${stageLabel(e.stage)} started`
+    case 'node.completed':    return `${stageLabel(e.stage)} completed`
+    case 'pipeline.completed':return 'Pipeline finished'
+    case 'hitl.requested':    return 'RM review required'
+    case 'outreach.required': return 'Follow-up triggered'
+    case 'outreach.sent':     return 'Follow-up sent'
+    case 'info_requested':    return 'More info needed'
+    case 'assessment_ready':  return 'AI advisor ready to chat'
+    default:                  return e.event
+  }
+}
+
+function eventSub(e: PipelineEvent): string {
+  switch (e.event) {
+    case 'node.started':
+    case 'node.completed':
+      return e.stage && e.event !== 'node.completed' ? stageLabel(e.stage) : ''
+    case 'outreach.required':
+      return (e.data as Record<string, unknown> | undefined)?.hours_stale
+        ? `Application stale ${(e.data as Record<string, unknown>).hours_stale}h`
+        : ''
+    case 'outreach.sent':
+      return (e as unknown as Record<string, unknown>).subject as string ?? ''
+    case 'info_requested':
+      return (e as unknown as Record<string, unknown>).reason as string ?? 'Qualification needs clarification'
+    case 'assessment_ready':
+      return 'Priya · AI Advisor is waiting'
+    default:
+      return e.stage ? stageLabel(e.stage) : ''
+  }
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -94,16 +133,10 @@ export default function NotificationFeed({ applicationId, events: propEvents, co
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-slate-700 dark:text-slate-300 truncate">
-                      {e.event === 'node.completed' && e.stage
-                        ? `${stageLabel(e.stage)} completed`
-                        : e.event === 'pipeline.completed'
-                        ? 'Pipeline finished'
-                        : e.event === 'hitl.requested'
-                        ? 'RM review required'
-                        : e.event}
+                      {eventLabel(e)}
                     </p>
-                    {e.stage && e.event !== 'node.completed' && (
-                      <p className="text-slate-400 truncate">{stageLabel(e.stage)}</p>
+                    {eventSub(e) && (
+                      <p className="text-slate-400 truncate text-[11px]">{eventSub(e)}</p>
                     )}
                   </div>
                   {e.timestamp && (

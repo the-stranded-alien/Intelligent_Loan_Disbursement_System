@@ -8,6 +8,7 @@ from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
 from services.json_parser import parse_llm_json
+from services.llm_utils import call_llm
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,8 @@ async def run_identity_verification(state: ApplicationState) -> ApplicationState
     prompt = _render_prompt(state)
 
     try:
-        response = await client.messages.create(
+        response, metrics = await call_llm(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
@@ -75,6 +77,7 @@ async def run_identity_verification(state: ApplicationState) -> ApplicationState
             "pan_entity_type": result.get("pan_entity_type"),
             "face_match_confidence": face_conf_pct,
             "kyc_notes": result.get("kyc_notes"),
+            **metrics,
         }
 
         updated_state = {

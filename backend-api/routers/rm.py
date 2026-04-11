@@ -1,7 +1,11 @@
+import math
 import uuid
+import httpx
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
+from config.settings import settings
 from db.session import SessionLocal
 from db.models import Application, RMReview, AuditLog
 from schemas.rm import RMReviewSubmit
@@ -82,6 +86,107 @@ async def submit_review(application_id: str, payload: RMReviewSubmit):
         return {"application_id": application_id, "decision": payload.decision.value, "status": app.status}
     finally:
         db.close()
+
+
+@router.get("/{application_id}/negotiation-advice")
+async def get_negotiation_advice(application_id: str):
+    """
+    Call agent-service to get offer recommendation advice for the RM.
+    Extracts offer data from the audit log (art_negotiation stage result).
+    """
+    db = SessionLocal()
+    try:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        # Find the art_negotiation stage result from audit logs
+        logs = db.query(AuditLog).filter(
+            AuditLog.application_id == application_id,
+            AuditLog.event_type == "stage.art_negotiation.completed",
+        ).order_by(AuditLog.created_at.desc()).first()
+
+        if not logs or not logs.payload:
+            raise HTTPException(status_code=404, detail="No offer data found — art_negotiation not yet completed")
+
+        stage_result = logs.payload.get("result", {})
+        offers_raw = stage_result.get("offers", [])
+        credit_score = stage_result.get("credit_score", 0)
+
+        application_data = {
+            "full_name": app.full_name,
+            "monthly_income": float(app.monthly_income or 0),
+            "existing_emi_amount": float(app.existing_emi_amount or 0),
+            "employment_type": app.employment_type or "salaried",
+            "loan_amount": float(app.loan_amount or 0),
+            "tenure_months": app.tenure_months or 12,
+            "credit_score": credit_score,
+            "offers": offers_raw,
+        }
+    finally:
+        db.close()
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.agent_service_url}/api/v1/negotiation/analyse",
+                json=application_data,
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Agent service error: {e}")
+
+
+class CounterOfferRequest(BaseModel):
+    rate: float          # annual interest rate %
+    tenure_months: int   # repayment period
+
+
+@router.post("/{application_id}/counter-offer")
+async def calculate_counter_offer(application_id: str, payload: CounterOfferRequest):
+    """
+    RM counter-offer simulator — returns recalculated EMI/totals for a custom
+    interest rate and tenure without calling Claude (pure math).
+    """
+    db = SessionLocal()
+    try:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        # Use sanctioned amount from latest art_negotiation audit log if available
+        logs = db.query(AuditLog).filter(
+            AuditLog.application_id == application_id,
+            AuditLog.event_type == "stage.art_negotiation.completed",
+        ).order_by(AuditLog.created_at.desc()).first()
+
+        principal = float(app.loan_amount or 0)
+        if logs and logs.payload:
+            stage_result = logs.payload.get("result", {})
+            principal = float(stage_result.get("sanctioned_amount") or principal)
+    finally:
+        db.close()
+
+    rate = payload.rate
+    n = payload.tenure_months
+    if rate <= 0 or n <= 0 or principal <= 0:
+        raise HTTPException(status_code=422, detail="rate, tenure_months, and loan amount must be positive")
+
+    monthly_rate = rate / 12 / 100
+    emi = principal * monthly_rate * (1 + monthly_rate) ** n / ((1 + monthly_rate) ** n - 1)
+    total_payable = emi * n
+    processing_fee = round(principal * 0.01, 2)  # 1% flat
+
+    return {
+        "principal": round(principal, 2),
+        "rate": rate,
+        "tenure_months": n,
+        "monthly_emi": round(emi, 2),
+        "total_payable": round(total_payable, 2),
+        "total_interest": round(total_payable - principal, 2),
+        "processing_fee": processing_fee,
+    }
 
 
 @router.get("/{application_id}/context")

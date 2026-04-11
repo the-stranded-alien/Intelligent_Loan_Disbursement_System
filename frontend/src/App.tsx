@@ -2,13 +2,15 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   Moon, Sun, Zap, Menu, X,
-  FileText, LayoutList, Activity, Users, BarChart2,
+  FileText, LayoutList, Activity, Users, BarChart2, Bot,
 } from 'lucide-react'
 import ApplicationForm from '@/pages/ApplicationForm'
 import StatusTracker from '@/pages/StatusTracker'
 import RMDashboard from '@/pages/RMDashboard'
 import Analytics from '@/pages/Analytics'
 import ApplicationsList from '@/pages/ApplicationsList'
+import AssessmentChat from '@/pages/AssessmentChat'
+import AgentActivity from '@/pages/AgentActivity'
 
 const navItems = [
   { to: '/',            label: 'Apply',        icon: FileText },
@@ -16,6 +18,7 @@ const navItems = [
   { to: '/status',      label: 'Track Status', icon: Activity },
   { to: '/rm',          label: 'RM Dashboard', icon: Users },
   { to: '/analytics',   label: 'Analytics',    icon: BarChart2 },
+  { to: '/agents',      label: 'Agents',       icon: Bot },
 ]
 
 export default function App() {
@@ -137,12 +140,14 @@ export default function App() {
         {/* ── Page content ── */}
         <main className="max-w-7xl mx-auto px-4 py-6 md:py-8 animate-fade-in">
           <Routes>
-            <Route path="/"                      element={<ApplicationForm />} />
-            <Route path="/status"                element={<StatusTracker />} />
-            <Route path="/status/:applicationId" element={<StatusTracker />} />
-            <Route path="/rm"                    element={<RMDashboard />} />
-            <Route path="/analytics"             element={<Analytics />} />
-            <Route path="/applications"          element={<ApplicationsList />} />
+            <Route path="/"                                element={<ApplicationForm />} />
+            <Route path="/status"                          element={<StatusTracker />} />
+            <Route path="/status/:applicationId"           element={<StatusTracker />} />
+            <Route path="/rm"                              element={<RMDashboard />} />
+            <Route path="/analytics"                       element={<Analytics />} />
+            <Route path="/applications"                    element={<ApplicationsList />} />
+            <Route path="/assessment/:applicationId"       element={<AssessmentChat />} />
+            <Route path="/agents"                          element={<AgentActivity />} />
           </Routes>
         </main>
 

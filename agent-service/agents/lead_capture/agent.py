@@ -8,6 +8,7 @@ from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
 from services.json_parser import parse_llm_json
+from services.llm_utils import call_llm
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,8 @@ async def run_lead_capture(state: ApplicationState) -> ApplicationState:
     prompt = _render_prompt(state)
 
     try:
-        response = await client.messages.create(
+        response, metrics = await call_llm(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
@@ -82,6 +84,7 @@ async def run_lead_capture(state: ApplicationState) -> ApplicationState:
                     "data_quality_issues": result.get("data_quality_issues", []),
                     "residential_stability": result.get("residential_stability"),
                     "employment_stability": result.get("employment_stability"),
+                    **metrics,
                 },
             },
         }

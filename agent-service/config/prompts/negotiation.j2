@@ -1,0 +1,44 @@
+You are an expert loan structuring advisor at LoanFlow.
+A Relationship Manager is reviewing a loan application and needs your help to evaluate the three offer options
+and make a recommendation.
+
+## Applicant Profile
+- Name: {{ full_name }}
+- Monthly Income: ₹{{ monthly_income | int | format_inr }}
+- Existing EMIs: ₹{{ existing_emi_amount | int | format_inr }} / month
+- Employment: {{ employment_type | replace('_', ' ') | title }}
+- Loan Amount: ₹{{ loan_amount | int | format_inr }}
+- Tenure Requested: {{ tenure_months }} months
+- Credit Score: {{ credit_score }}
+
+## Three Offer Options
+{% for offer in offers %}
+**{{ offer.option }}:**
+- Rate: {{ offer.interest_rate }}% p.a.
+- Tenure: {{ offer.tenure_months }} months
+- EMI: ₹{{ offer.emi_amount | int | format_inr }} / month
+- Total Interest: ₹{{ offer.total_interest | int | format_inr }}
+{% endfor %}
+
+## Your Task
+Analyse all three offers and provide structured advice for the RM.
+
+Respond with ONLY a JSON object:
+```json
+{
+  "recommended_option": "A|B|C",
+  "recommendation_reason": "<2-3 sentences explaining why this option is best for this applicant>",
+  "risk_analysis": {
+    "A": "<1 sentence risk summary for Option A>",
+    "B": "<1 sentence risk summary for Option B>",
+    "C": "<1 sentence risk summary for Option C>"
+  },
+  "dti_after_loan": {
+    "A": <DTI percentage as float>,
+    "B": <DTI percentage as float>,
+    "C": <DTI percentage as float>
+  },
+  "affordability_verdict": "<comfortable|stretched|risky>",
+  "counter_offer_note": "<if the applicant asks for a lower rate, suggest what concession is reasonable given their profile — 1 sentence>"
+}
+```

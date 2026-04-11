@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Users, CheckCircle2, Clock, ChevronRight, RefreshCw,
-  ArrowLeft, AlertCircle, Banknote,
+  ArrowLeft, AlertCircle, Banknote, MessageSquare,
 } from 'lucide-react'
 import AgentDecisionCard from '@/components/AgentDecisionCard'
 import WhatIfAnalysis from '@/components/WhatIfAnalysis'
+import NegotiationPanel from '@/components/NegotiationPanel'
 import { cn } from '@/lib/utils'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -81,6 +83,7 @@ function QueueCard({
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function RMDashboard() {
+  const navigate = useNavigate()
   const [queue, setQueue]           = useState<QueueItem[]>([])
   const [selected, setSelected]     = useState<QueueItem | null>(null)
   const [form, setForm]             = useState<ReviewForm>({ decision: 'approve', notes: '' })
@@ -218,11 +221,23 @@ export default function RMDashboard() {
                 </div>
               </div>
 
+              {/* Start Assessment button */}
+              <button
+                onClick={() => navigate(`/assessment/${selected.application_id}`)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors w-full sm:w-auto"
+              >
+                <MessageSquare size={14} />
+                Start Repayment Assessment
+              </button>
+
               {/* AI context + simulator */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <AgentDecisionCard applicationId={selected.application_id} />
                 <WhatIfAnalysis applicationId={selected.application_id} />
               </div>
+
+              {/* Negotiation advisor */}
+              <NegotiationPanel applicationId={selected.application_id} />
 
               {/* Decision form */}
               <div className="card p-5 space-y-4">

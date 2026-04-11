@@ -7,6 +7,7 @@ from graph.state import ApplicationState
 from config.settings import settings
 from services.event_publisher import event_publisher
 from services.json_parser import parse_llm_json
+from services.llm_utils import call_llm
 from agents.credit_assessment.tools import CIBIL_TOOL_SCHEMA, mock_cibil_lookup
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,8 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
 
     try:
         # ── Turn 1: Claude calls the CIBIL tool ───────────────────────────────
-        response = await client.messages.create(
+        response, metrics_t1 = await call_llm(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=1024,
             system=_SYSTEM_PROMPT,
@@ -102,7 +104,6 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
             messages=messages,
         )
 
-        # Extract tool call and execute it
         tool_use_block = next(
             (b for b in response.content if b.type == "tool_use"),
             None,
@@ -126,7 +127,8 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
                 ],
             })
 
-            final_response = await client.messages.create(
+            final_response, metrics_t2 = await call_llm(
+                client,
                 model="claude-sonnet-4-6",
                 max_tokens=512,
                 system=_SYSTEM_PROMPT,
@@ -137,17 +139,22 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
                 (b.text for b in final_response.content if hasattr(b, "text")),
                 "{}",
             )
+            # Sum tokens across both turns
+            metrics = {
+                "input_tokens": metrics_t1["input_tokens"] + metrics_t2["input_tokens"],
+                "output_tokens": metrics_t1["output_tokens"] + metrics_t2["output_tokens"],
+                "latency_ms": metrics_t1["latency_ms"] + metrics_t2["latency_ms"],
+            }
         else:
-            # Claude skipped the tool — use whatever text it returned directly
             result_text = next(
                 (b.text for b in response.content if hasattr(b, "text")),
                 "{}",
             )
             cibil_result = {}
+            metrics = metrics_t1
 
         result = parse_llm_json(result_text)
 
-        # dti_ratio: normalise to percentage for UI
         raw_dti = result.get("dti_ratio", 0)
         dti_pct = round(float(raw_dti) * 100, 1) if float(raw_dti) <= 1 else round(float(raw_dti), 1)
 
@@ -159,10 +166,10 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
             "dti_ratio": dti_pct,
             "risk_grade": result.get("risk_grade"),
             "credit_notes": result.get("credit_notes"),
-            # Raw bureau data for audit trail
             "bureau_active_loans": cibil_result.get("active_loan_count"),
             "bureau_overdue_payments": cibil_result.get("overdue_payments_last_12m"),
             "bureau_credit_age_months": cibil_result.get("credit_age_months"),
+            **metrics,
         }
 
         updated_state = {

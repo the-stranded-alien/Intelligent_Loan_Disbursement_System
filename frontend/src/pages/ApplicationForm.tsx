@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -7,7 +7,7 @@ import { useApplicationStore } from '@/store/applicationStore'
 import {
   CheckCircle2, ArrowRight, ArrowLeft,
   User, Banknote, ClipboardCheck, Building2,
-  Zap, Shield, Clock, Copy, Check,
+  Zap, Shield, Clock, Copy, Check, XCircle, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -140,17 +140,54 @@ function ReviewRow({ label, value, last = false }: { label: string; value: strin
 
 // ── Main component ─────────────────────────────────────────────────────────
 
+// ── Eligibility result screen ──────────────────────────────────────────────
+
+interface EligibilityState {
+  applicationId: string
+  result: 'checking' | 'eligible' | 'ineligible'
+  reason?: string
+}
+
 export default function ApplicationForm() {
   const [step, setStep]             = useState(0)
   const [personal, setPersonal]     = useState<PersonalData | null>(null)
   const [financial, setFinancial]   = useState<FinancialData | null>(null)
   const [loan, setLoan]             = useState<LoanData | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [success, setSuccess]       = useState<{ id: string } | null>(null)
+  const [eligibility, setEligibility] = useState<EligibilityState | null>(null)
   const [error, setError]           = useState('')
   const [copied, setCopied]         = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const navigate = useNavigate()
   const addApplication = useApplicationStore(s => s.addApplication)
+
+  // Poll /events after submit to detect lead_capture completion
+  useEffect(() => {
+    if (!eligibility || eligibility.result !== 'checking') return
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/v1/applications/${eligibility.applicationId}/events`)
+        if (!res.ok) return
+        const events: Array<{ event: string; payload: Record<string, unknown> | null }> = await res.json()
+        const leadEvent = events.find(e => e.event === 'stage.lead_capture.completed')
+        if (!leadEvent?.payload) return
+
+        const result = leadEvent.payload.result as Record<string, unknown> | undefined
+        const eligResult = result?.eligibility_result as string | undefined
+        if (!eligResult) return
+
+        clearInterval(pollRef.current!)
+        setEligibility(prev => prev ? {
+          ...prev,
+          result: eligResult === 'eligible' ? 'eligible' : 'ineligible',
+          reason: result?.eligibility_reason as string | undefined,
+        } : prev)
+      } catch { /* ignore */ }
+    }, 2000)
+
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [eligibility?.applicationId, eligibility?.result])
 
   const personalForm  = useForm<PersonalData>({ resolver: zodResolver(personalSchema) })
   const financialForm = useForm<FinancialData>({
@@ -182,7 +219,8 @@ export default function ApplicationForm() {
         applicantName: personal.full_name,
         loanAmount: loan.loan_amount,
       })
-      setSuccess({ id: data.application_id })
+      // Show eligibility checking screen instead of going straight to status
+      setEligibility({ applicationId: data.application_id, result: 'checking' })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Submission failed')
     } finally {
@@ -191,45 +229,100 @@ export default function ApplicationForm() {
   }
 
   function copyId() {
-    if (!success) return
-    navigator.clipboard.writeText(success.id).then(() => {
+    if (!eligibility) return
+    navigator.clipboard.writeText(eligibility.applicationId).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
   }
 
-  // ── Success screen ──────────────────────────────────────────────────────
+  // ── Eligibility screen (checking → eligible | ineligible) ───────────────
 
-  if (success) {
+  if (eligibility) {
+    const checking   = eligibility.result === 'checking'
+    const eligible   = eligibility.result === 'eligible'
+    const ineligible = eligibility.result === 'ineligible'
+
     return (
       <div className="max-w-lg mx-auto animate-slide-up">
         <div className="card p-8 text-center space-y-5 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-500 via-violet-500 to-emerald-400" />
+          <div className={cn(
+            'absolute top-0 left-0 right-0 h-1 bg-gradient-to-r',
+            checking   ? 'from-brand-500 via-violet-500 to-brand-500 animate-pulse' :
+            eligible   ? 'from-brand-500 via-violet-500 to-emerald-400' :
+                         'from-red-500 to-red-400',
+          )} />
+
           <div className="relative">
             <div className="w-20 h-20 mx-auto relative">
-              <div className="absolute inset-0 bg-emerald-400/20 rounded-full blur-xl animate-glow-pulse" />
-              <div className="relative w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg">
-                <CheckCircle2 size={36} className="text-white" />
-              </div>
+              {checking && (
+                <>
+                  <div className="absolute inset-0 bg-brand-400/20 rounded-full blur-xl animate-glow-pulse" />
+                  <div className="relative w-20 h-20 bg-gradient-to-br from-brand-400 to-brand-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Loader2 size={36} className="text-white animate-spin" />
+                  </div>
+                </>
+              )}
+              {eligible && (
+                <>
+                  <div className="absolute inset-0 bg-emerald-400/20 rounded-full blur-xl animate-glow-pulse" />
+                  <div className="relative w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg">
+                    <CheckCircle2 size={36} className="text-white" />
+                  </div>
+                </>
+              )}
+              {ineligible && (
+                <div className="relative w-20 h-20 bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center shadow-lg mx-auto">
+                  <XCircle size={36} className="text-white" />
+                </div>
+              )}
             </div>
           </div>
+
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Application Submitted!</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">
-              Your application is now in the AI pipeline. Track real-time progress below.
-            </p>
+            {checking && (
+              <>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Checking Eligibility…</h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">
+                  Our AI is reviewing your application. This takes just a few seconds.
+                </p>
+              </>
+            )}
+            {eligible && (
+              <>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">You're Eligible!</h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">
+                  Your application passed initial screening. KYC verification is next — no action needed from you.
+                </p>
+              </>
+            )}
+            {ineligible && (
+              <>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Not Eligible at This Time</h2>
+                {eligibility.reason && (
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">{eligibility.reason}</p>
+                )}
+              </>
+            )}
           </div>
+
           <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-4 border border-slate-200/60 dark:border-slate-700/50">
             <p className="text-xs text-slate-400 mb-1.5 font-medium">Application ID</p>
-            <p className="font-mono text-sm font-bold text-slate-800 dark:text-slate-100 break-all mb-2">{success.id}</p>
-            <button onClick={copyId} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-brand-500 transition-colors">
+            <p className="font-mono text-sm font-bold text-slate-800 dark:text-slate-100 break-all mb-2">{eligibility.applicationId}</p>
+            <button onClick={copyId} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-brand-500 transition-colors mx-auto">
               {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
               {copied ? 'Copied!' : 'Copy ID'}
             </button>
           </div>
-          <button onClick={() => navigate(`/status/${success.id}`)} className="btn-primary w-full flex items-center justify-center gap-2">
-            Track Your Application <ArrowRight size={14} />
-          </button>
+
+          {!checking && (
+            <button
+              onClick={() => navigate(`/status/${eligibility.applicationId}`)}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              {eligible ? 'Track Your Application' : 'View Details'} <ArrowRight size={14} />
+            </button>
+          )}
         </div>
       </div>
     )
