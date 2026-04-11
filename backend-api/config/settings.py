@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # Services
     agent_service_url: str = "http://localhost:8001"
+    anthropic_api_key: str = ""
 
     # Storage
     storage_backend: str = "local"
