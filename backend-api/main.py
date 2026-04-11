@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
-from routers import applications, analytics, documents, rm, webhooks, websocket
+from routers import applications, analytics, documents, rm, webhooks, websocket, assessment_proxy
 from services.event_consumer import EventConsumer
 
 consumer = EventConsumer()
@@ -41,6 +41,7 @@ app.include_router(rm.router, prefix="/api/v1/rm", tags=["rm"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
 app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
+app.include_router(assessment_proxy.router, prefix="/api/v1/assessment", tags=["assessment"])
 
 
 @app.get("/health", tags=["health"])

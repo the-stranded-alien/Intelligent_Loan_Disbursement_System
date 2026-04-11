@@ -2,7 +2,7 @@
 set -e
 
 # Only substitute PORT and BACKEND_URL — leave nginx vars ($uri, $proxy_host, etc.) intact
-envsubst '${PORT} ${BACKEND_URL} ${AGENT_SERVICE_URL}' \
+envsubst '${PORT} ${BACKEND_URL}' \
     < /etc/nginx/conf.d/default.conf.template \
     > /etc/nginx/conf.d/default.conf
 
