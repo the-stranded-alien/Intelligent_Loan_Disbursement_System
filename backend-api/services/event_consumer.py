@@ -248,23 +248,20 @@ class EventConsumer:
 
 
 async def _start_assessment_session(application_id: str, applicant_data: dict):
-    """Fire-and-forget: create an AssessmentSession on agent-service and broadcast session_id."""
+    """Fire-and-forget: create an AssessmentSession locally and broadcast session_id."""
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.post(
-                f"{settings.agent_service_url}/api/v1/assessment/{application_id}/start",
-                json={"applicant_data": applicant_data},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            session_id = data.get("session_id")
-            opening = data.get("opening", "")
-            await websocket_manager.broadcast(application_id, {
-                "event": "assessment_ready",
-                "session_id": session_id,
-                "opening": opening,
-            })
-            logger.info("Auto-started assessment session %s for %s", session_id, application_id)
+        import uuid
+        from routers.assessment_proxy import AssessmentSession, _sessions
+        session_id = str(uuid.uuid4())
+        session = AssessmentSession(session_id, application_id, applicant_data)
+        opening = await session.start()
+        _sessions[session_id] = session
+        await websocket_manager.broadcast(application_id, {
+            "event": "assessment_ready",
+            "session_id": session_id,
+            "opening": opening,
+        })
+        logger.info("Auto-started assessment session %s for %s", session_id, application_id)
     except Exception as e:
         logger.warning("Failed to auto-start assessment for %s: %s", application_id, e)
 

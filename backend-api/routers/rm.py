@@ -1,6 +1,8 @@
+import json
 import math
+import re
 import uuid
-import httpx
+import anthropic
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -12,6 +14,75 @@ from schemas.rm import RMReviewSubmit
 from services.event_publisher import event_publisher
 
 router = APIRouter()
+
+
+def _inr(n: float) -> str:
+    s = str(int(n))
+    if len(s) <= 3:
+        return s
+    result = s[-3:]
+    s = s[:-3]
+    while len(s) > 2:
+        result = s[-2:] + "," + result
+        s = s[:-2]
+    if s:
+        result = s + "," + result
+    return result
+
+
+async def _negotiation_analyse(data: dict) -> dict:
+    """Inline negotiation LLM call — no agent-service dependency."""
+    offers_text = ""
+    for offer in data.get("offers", []):
+        offers_text += (
+            f"\n**{offer.get('option')}:**\n"
+            f"- Rate: {offer.get('interest_rate')}% p.a.\n"
+            f"- Tenure: {offer.get('tenure_months')} months\n"
+            f"- EMI: ₹{_inr(float(offer.get('emi_amount', 0)))} / month\n"
+            f"- Total Interest: ₹{_inr(float(offer.get('total_interest', 0)))}\n"
+        )
+
+    employment = (data.get("employment_type") or "salaried").replace("_", " ").title()
+    prompt = f"""You are an expert loan structuring advisor at LoanFlow.
+A Relationship Manager is reviewing a loan application and needs your help to evaluate the three offer options.
+
+## Applicant Profile
+- Name: {data.get("full_name", "")}
+- Monthly Income: ₹{_inr(float(data.get("monthly_income", 0)))}
+- Existing EMIs: ₹{_inr(float(data.get("existing_emi_amount", 0)))} / month
+- Employment: {employment}
+- Loan Amount: ₹{_inr(float(data.get("loan_amount", 0)))}
+- Tenure Requested: {data.get("tenure_months", 12)} months
+- Credit Score: {data.get("credit_score", 0)}
+
+## Three Offer Options
+{offers_text}
+
+Respond with ONLY a JSON object:
+```json
+{{
+  "recommended_option": "A|B|C",
+  "recommendation_reason": "<2-3 sentences>",
+  "risk_analysis": {{"A": "<1 sentence>", "B": "<1 sentence>", "C": "<1 sentence>"}},
+  "dti_after_loan": {{"A": <float>, "B": <float>, "C": <float>}},
+  "affordability_verdict": "<comfortable|stretched|risky>",
+  "counter_offer_note": "<1 sentence>"
+}}
+```"""
+
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    response = await client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=512,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = response.content[0].text.strip()
+    m = re.search(r"```json\s*(.*?)\s*```", raw, re.DOTALL)
+    text = m.group(1) if m else raw
+    try:
+        return json.loads(text)
+    except Exception:
+        return {"error": "Failed to parse negotiation advice", "raw": raw}
 
 
 @router.get("/queue")
@@ -127,15 +198,9 @@ async def get_negotiation_advice(application_id: str):
         db.close()
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{settings.agent_service_url}/api/v1/negotiation/analyse",
-                json=application_data,
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Agent service error: {e}")
+        return await _negotiation_analyse(application_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Negotiation analysis failed: {e}")
 
 
 class CounterOfferRequest(BaseModel):
