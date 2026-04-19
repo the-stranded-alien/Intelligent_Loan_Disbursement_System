@@ -234,7 +234,7 @@ frontend/src/
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Part 8 — Complete Code Review & Remaining Work (Session 4)
+### Part 8 — Complete Code Review & Bug Fixes (Session 4)
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -244,16 +244,10 @@ frontend/src/
 | **disbursement.j2 prompt fixed** | ✅ Done | Removed undefined `payment_response` variable; corrected all field names |
 | **graph/state.py — disbursement fields added** | ✅ Done | Added `disbursement_status`, `disbursement_reference`, `disbursement_attempts` to `ApplicationState` |
 | **graph/graph.py — disbursement wired** | ✅ Done | Pipeline now 8 nodes: `esign → disbursement → END`; `run_disbursement` imported and registered |
-| **pgvector RAG policy documents** | ✅ Done | `agent-service/data/`: `rbi_guidelines.txt`, `aml_rules.txt`, `lending_policy.txt` |
-| **embedding_service.py completed** | ✅ Done | `embed()`, `similarity_search()`, `upsert()` implemented using OpenAI `text-embedding-3-small` |
-| **seed_embeddings.py created** | ✅ Done | `agent-service/scripts/seed_embeddings.py` — chunks docs, embeds via OpenAI, upserts to pgvector; idempotent |
-| **Alembic migration 0007** | ✅ Done | Creates `compliance_embeddings` table with `vector(1536)` column + ivfflat index |
-| **`openai` added to agent-service requirements** | ✅ Done | `openai==1.59.0`; `OPENAI_API_KEY` in settings + docker-compose |
 
 ## Remaining Opportunities (Post-MVP)
 
-One genuinely optional item remains:
-
 | Item | Notes |
 |------|-------|
+| pgvector RAG seeding | compliance_policies collection; `/seed-rag` skill available |
 | Real bank disbursement API | Replace deterministic stub in `run_disbursement` with live IMPS/NEFT call; the `retry_disbursement` Celery task and retry skeleton are already in place |

@@ -124,7 +124,6 @@ services:
     environment:
       <<: *common-env
       HITL_THRESHOLD: ${HITL_THRESHOLD:-200000}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
       RAG_COLLECTION_NAME: ${RAG_COLLECTION_NAME:-compliance_policies}
@@ -169,7 +168,6 @@ services:
       <<: *common-env
       HITL_THRESHOLD: ${HITL_THRESHOLD:-200000}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       BACKEND_API_URL: ${BACKEND_API_URL:-http://backend-api:8000}
       NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:8002}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}

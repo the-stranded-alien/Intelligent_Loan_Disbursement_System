@@ -7,9 +7,6 @@ class Settings(BaseSettings):
     # Anthropic
     anthropic_api_key: str = ""
 
-    # OpenAI — used only by seed_embeddings.py for generating pgvector embeddings
-    openai_api_key: str = ""
-
     # Database
     database_url: str = "postgresql://loan_user:changeme@localhost:5432/loan_db"
 
