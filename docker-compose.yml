@@ -83,6 +83,7 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
       AGENT_SERVICE_URL: ${AGENT_SERVICE_URL:-http://agent-service:8001}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:8002}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
       LOCAL_STORAGE_PATH: /app/uploads
     ports:

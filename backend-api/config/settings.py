@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # Services
     agent_service_url: str = "http://localhost:8001"
+    notification_service_url: str = "http://localhost:8002"
     anthropic_api_key: str = ""
 
     # Storage

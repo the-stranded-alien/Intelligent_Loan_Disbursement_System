@@ -184,20 +184,12 @@ def retry_disbursement(self: Task, application_id: str) -> dict:
         attempt + 1, settings.disbursement_max_retries, application_id,
     )
 
-    # Simulate bank API call — in production replace with real HTTP call.
-    import random
-    # First attempt succeeds 70% of the time; subsequent retries succeed 95%.
-    success_prob = 0.70 if attempt == 0 else 0.95
-    disbursement_ok = random.random() < success_prob
-
-    if not disbursement_ok:
-        # Exponential back-off: 0 → 3600s → 14400s → 86400s
-        countdown = [0, 3600, 14400, 86400][min(attempt, 3)]
-        logger.warning(
-            "Disbursement failed for %s (attempt %d) — retrying in %ds",
-            application_id, attempt + 1, countdown,
-        )
-        raise self.retry(countdown=countdown, exc=RuntimeError("Bank transfer failed"))
+    # Deterministic simulation — always succeeds.
+    # In production, replace with a real bank API call and retry on failure:
+    #   resp = httpx.post(BANK_API_URL, json={...}, headers={"Authorization": f"Bearer {token}"})
+    #   if resp.status_code != 200:
+    #       countdown = [0, 3600, 14400, 86400][min(attempt, 3)]
+    #       raise self.retry(countdown=countdown, exc=RuntimeError("Bank transfer failed"))
 
     # Success — publish disbursed event and update application status via event bus
     disbursement_ref = f"DISB-{application_id[:8].upper()}-{attempt + 1:02d}"
