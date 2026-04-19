@@ -1,6 +1,6 @@
 # Final Plan — Intelligent Loan Disbursement System
 
-## Status as of 2026-04-11
+## Status as of 2026-04-19
 
 All planned features are **complete**. The system is a fully working end-to-end
 intelligent loan disbursement platform. This document tracks what was built across
@@ -86,43 +86,7 @@ the two implementation sessions.
 
 ---
 
-## System Architecture (Final)
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Frontend (React 18 + shadcn/ui) — port 3000                    │
-│  Pages: Apply, Track, RM Dashboard, Applications, Analytics      │
-│  + AssessmentChat (/assessment/:id)                              │
-└──────────────┬──────────────────────────────┬───────────────────┘
-               │ /api/*                        │ /api/v1/assessment/*
-               ▼                              ▼
-┌─────────────────────────┐   ┌────────────────────────────────────┐
-│  backend-api (port 8000) │   │  agent-service (port 8001)         │
-│  FastAPI + SQLAlchemy    │   │  FastAPI + LangGraph               │
-│  Event consumer (Redis)  │   │  Assessment WS endpoint            │
-│  WebSocket manager       │   │  Negotiation HTTP endpoint         │
-│  RM + analytics routers  │   │  Celery worker (agent queue)       │
-└──────────┬──────────────┘   │  Celery Beat (hourly monitoring)   │
-           │                  └──────────────┬─────────────────────┘
-           │ Redis Streams (loan:events)      │
-           └──────────────────┬──────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  LangGraph 7-node pipeline                                       │
-│  lead_capture → lead_qualification → identity_verification       │
-│  → credit_assessment (mock CIBIL tool_use)                       │
-│  → art_negotiation (HITL interrupt > ₹2L)                       │
-│  → enach → esign                                                 │
-└─────────────────────────────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────┐
-│  notification-service (port 8002) │
-│  Celery worker (notifications)    │
-│  SendGrid + Twilio                │
-│  /internal/send-outreach endpoint │
-└──────────────────────────────────┘
-```
+## System Architecture (Session 3 snapshot — superseded by Part 7 diagram above)
 
 ### Background Agents (outside LangGraph)
 
@@ -138,13 +102,19 @@ Celery Beat (hourly)
 
 RM opens pending_review application
   └─→ GET /api/v1/rm/{id}/negotiation-advice
-        └─→ agent-service POST /api/v1/negotiation/analyse
+        └─→ _negotiation_analyse() in rm.py (inline Claude call)
               └─→ Claude analyses 3 offers → recommendation JSON
 
-RM clicks "Start Assessment"
-  └─→ POST /api/v1/assessment/{id}/start → session_id
+Node 2 result = request_info (auto-trigger)
+  └─→ event_consumer._start_assessment_session() [in-process]
+        └─→ AssessmentSession.start() → opening message
+              └─→ assessment_ready WS broadcast with session_id + opening
+                    └─→ StatusTracker shows violet banner → /assessment/{id}?session={sid}
+
+RM or applicant clicks "Start Chat"
+  └─→ GET /api/v1/assessment/session/{sid} (reuse pre-created session)
         └─→ WS /api/v1/assessment/ws/{session_id}
-              └─→ AssessmentSession (Claude multi-turn)
+              └─→ AssessmentSession (Claude multi-turn, in backend-api)
                     └─→ POST /{session_id}/finalize → result JSON
 ```
 
@@ -197,12 +167,72 @@ frontend/src/
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Auto-start AssessmentSession on `request_info` | ✅ Done | event_consumer calls agent-service `POST /api/v1/assessment/{id}/start` fire-and-forget |
+| Auto-start AssessmentSession on `request_info` | ✅ Done | event_consumer directly imports `AssessmentSession` from `assessment_proxy` and creates session in-process — no agent-service HTTP call |
 | `GET /session/{session_id}` endpoint | ✅ Done | Returns metadata for pre-created sessions (no re-POST needed) |
 | `assessment_ready` WS broadcast | ✅ Done | Includes `session_id` + `opening` after session is created |
 | StatusTracker assessment banner | ✅ Done | Violet banner with "Start Chat" → `/assessment/{id}?session={sid}` |
 | AssessmentChat `?session=` param | ✅ Done | Resumes pre-created session instead of starting a new one |
 | `PipelineEvent` type fields added | ✅ Done | `session_id`, `opening`, `reason` added to interface |
+
+### Part 7 — Railway Deployment Fixes & Final Hardening
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Eliminate backend-api → agent-service HTTP calls | ✅ Done | All inter-service calls removed; backend-api is fully self-contained on Railway |
+| `AssessmentSession` moved into backend-api | ✅ Done | `backend-api/routers/assessment_proxy.py` — self-contained with inline system prompt; no Jinja2/agent-service dep |
+| Negotiation analysis moved into backend-api | ✅ Done | `_negotiation_analyse()` inline in `rm.py`; calls Claude directly |
+| Fix nginx `unknown "agent_service_url" variable` crash | ✅ Done | Removed `/api/v1/assessment/` nginx block; assessment traffic routes through `/api/` → backend-api |
+| `anthropic` package added to backend-api | ✅ Done | `requirements.txt` + `ANTHROPIC_API_KEY` env var in docker-compose |
+| `notification_service_url` added to backend-api settings | ✅ Done | Was causing silent `AttributeError` when eligibility email fired |
+| `NOTIFICATION_SERVICE_URL` in docker-compose for backend-api | ✅ Done | Wired to `http://notification-service:8002` |
+| Fix vite.config.ts assessment proxy | ✅ Done | `/api/v1/assessment` now targets `localhost:8000` (backend-api), not `8001` |
+| Deterministic disbursement simulation | ✅ Done | Replaced `random.random()` with always-succeed stub; retry skeleton preserved in comments for production wiring |
+| None-safe numeric fields in AssessmentSession prompt | ✅ Done | `float(x or 0)` pattern for all DB fields that may be None |
+| Agent Activity page | ✅ Done | `/agents` page in frontend — polls `GET /api/v1/analytics/background-agents`; shows monitoring, outreach, pipeline, assessment stats |
+| `GET /api/v1/analytics/background-agents` endpoint | ✅ Done | Queries AuditLog for background agent events; returns structured sections |
+
+---
+
+## System Architecture (Final — Session 4)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Frontend (React 18 + shadcn/ui) — port 3000                    │
+│  Pages: Apply, Track, RM Dashboard, Applications, Analytics,    │
+│         AgentActivity (/agents), AssessmentChat (/assessment/:id)│
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ /api/* + /ws/* + /api/v1/assessment/*
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  backend-api (port 8000) — fully self-contained                  │
+│  FastAPI + SQLAlchemy                                            │
+│  Event consumer (Redis Streams)                                  │
+│  WebSocket manager                                               │
+│  RM + analytics + assessment_proxy + documents routers           │
+│  AssessmentSession class (inline — no agent-service dep)         │
+│  Negotiation analysis (inline Claude call — no agent-service dep)│
+└──────────────┬──────────────────────────────┬───────────────────┘
+               │ Redis Streams (loan:events)   │ HTTP /internal/*
+               ▼                              ▼
+┌─────────────────────────────┐   ┌────────────────────────────────┐
+│  agent-service (port 8001)   │   │  notification-service (8002)   │
+│  FastAPI + LangGraph         │   │  Celery worker (notifications) │
+│  Celery worker (agent queue) │   │  SendGrid + Twilio             │
+│  Celery Beat (hourly scan)   │   │  /internal/send-outreach       │
+│  Monitoring + Outreach agents│   └────────────────────────────────┘
+│  Assessment + Negotiation    │
+│  agents (agent-service only) │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  LangGraph 7-node pipeline                                       │
+│  lead_capture → lead_qualification → identity_verification       │
+│  → credit_assessment (mock CIBIL tool_use)                       │
+│  → art_negotiation (HITL interrupt > ₹2L)                       │
+│  → enach → esign                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Remaining Opportunities (Post-MVP)
 
@@ -212,4 +242,4 @@ These items are optional and not blocking:
 |------|-------|
 | Auth0 integration | Planned in Phase 5; all endpoints currently open |
 | pgvector RAG seeding | compliance_policies collection; `/seed-rag` skill available |
-| Real bank disbursement API | Replace random simulation in `retry_disbursement` with IMPS/NEFT call |
+| Real bank disbursement API | Replace deterministic stub in `retry_disbursement` with live IMPS/NEFT call; retry skeleton already wired |
