@@ -83,6 +83,11 @@ class ApplicationState(TypedDict, total=False):
     agreement_url: Optional[str]
     signed_at: Optional[str]
 
+    # ── Node 8: Disbursement ──────────────────────────────────────────────────
+    disbursement_status: Optional[str]     # success | failed | pending
+    disbursement_reference: Optional[str]
+    disbursement_attempts: int
+
     # ── LLM interaction ────────────────────────────────────────────────────────
     messages: list[dict[str, Any]]
     last_llm_response: Optional[str]

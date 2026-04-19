@@ -1,0 +1,165 @@
+LOANFLOW INTERNAL LENDING POLICY — CREDIT UNDERWRITING STANDARDS
+Version: 3.2 | Effective: 2024-01-01 | Owner: Credit Risk Committee
+
+=== SECTION 1: PRODUCT PARAMETERS ===
+
+1.1 Personal Loan
+Loan amount: ₹1,000 to ₹10,00,000 (₹10 lakh)
+Tenure: 6 to 60 months
+Interest rate: 10.5% to 28% p.a. (risk-based pricing)
+Processing fee: Up to 2% of loan amount (minimum ₹500)
+Prepayment charges: Nil for floating rate; 2% for fixed rate after 6 months
+Target segment: Salaried and self-employed individuals aged 21–60
+
+1.2 Loan Against Salary (LAS)
+Loan amount: Up to 10x net monthly salary, capped at ₹5,00,000
+Tenure: 12 to 48 months
+Eligibility: Minimum take-home salary ₹25,000 per month
+Processing fee: 1% flat
+Interest rate: 11.5% to 22% p.a.
+
+1.3 Business Loan (MSME)
+Loan amount: ₹1,00,000 to ₹50,00,000
+Tenure: 12 to 84 months
+Eligible entities: Proprietorships, Partnerships, LLPs, Private Limited Companies
+Minimum vintage: 2 years in business
+Processing fee: 1.5% to 2.5%
+Interest rate: 12% to 24% p.a.
+
+=== SECTION 2: CREDIT SCORING MODEL ===
+
+2.1 Risk Grade Classification
+LoanFlow uses an internal risk grading system based on CIBIL score and supplementary factors:
+
+Grade A (Score 750–900): Prime borrower
+- Rate range: 10.5%–14% p.a.
+- Loan amount: Up to 100% of eligible amount
+- Special offers possible; fast-track processing
+
+Grade B (Score 700–749): Standard borrower
+- Rate range: 14%–18% p.a.
+- Loan amount: Up to 90% of eligible amount
+- Standard processing; no special offers
+
+Grade C (Score 650–699): Sub-prime borrower
+- Rate range: 18%–24% p.a.
+- Loan amount: Up to 75% of eligible amount
+- Enhanced documentation required; credit committee review
+
+Grade D (Score 600–649): High-risk borrower
+- Rate range: 24%–28% p.a.
+- Loan amount: Up to 60% of eligible amount
+- Mandatory credit committee approval; additional security may be required
+
+Below 600: Decline recommended
+- May be reconsidered if strong income evidence, strong employer, and low DTI
+
+2.2 DTI Thresholds by Grade
+Grade A: DTI up to 50% acceptable
+Grade B: DTI up to 45% acceptable
+Grade C: DTI up to 40% acceptable
+Grade D: DTI up to 35% acceptable
+
+2.3 Supplementary Scoring Factors
+The following factors can adjust the base credit score rating by +/- 1 grade:
+Positive adjustments:
+- Stable employment at reputable employer 5+ years: +1 grade
+- Home ownership: +0.5 grade
+- Existing relationship with LoanFlow (no defaults): +0.5 grade
+- Post-graduate education in professional field: +0.25 grade
+
+Negative adjustments:
+- Rented accommodation with frequent moves: -0.5 grade
+- Self-employed less than 3 years: -0.5 grade
+- Multiple loan inquiries in last 6 months (>4): -0.5 grade
+- Employment gap in last 2 years (>3 months): -0.5 grade
+
+=== SECTION 3: SANCTIONING AUTHORITY MATRIX ===
+
+3.1 Automated Sanctioning (AI Pipeline)
+Loans up to ₹2,00,000 (₹2 lakh) for Grade A and B borrowers may be sanctioned by the automated AI pipeline without human review.
+
+3.2 Relationship Manager (RM) Review
+Loans above ₹2,00,000 require RM review before sanction.
+RM sanctioning authority: Up to ₹10,00,000 for Grade A borrowers, ₹5,00,000 for Grade B.
+RM must document rationale for any deviation from credit model recommendation.
+
+3.3 Credit Committee
+Loans above RM authority, all Grade C/D loans, and all exceptions to policy require credit committee approval.
+Credit committee meets every Tuesday and Thursday.
+Emergency approvals: Available via 2 senior credit officers for time-sensitive cases.
+
+3.4 Deviation Policy
+Deviations from standard policy are permitted but must be:
+- Documented with clear rationale
+- Approved one level above the standard sanctioning authority
+- Logged in the deviation register
+- Reviewed quarterly by the Credit Risk Committee
+
+=== SECTION 4: REPAYMENT COLLECTION POLICY ===
+
+4.1 EMI Collection
+EMIs are collected via e-NACH mandate on the EMI due date. Backup collection via payment link is available if NACH fails.
+
+4.2 Grace Period
+A 3-day grace period is permitted before an EMI is considered overdue. No late payment charges are levied within the grace period.
+
+4.3 Overdue Charges
+Overdue interest: 2% per month on the overdue EMI amount.
+Bounce charges: ₹500 per NACH return, not to exceed 3 charges per month.
+
+4.4 Collections Escalation
+Days 1–30 (SMA-0): Automated SMS and email reminders; system calls.
+Days 31–60 (SMA-1): Field executive outreach; payment plan discussion.
+Days 61–90 (SMA-2): Legal notice; settlement offer at 90% of outstanding.
+Day 91+ (NPA): Account transferred to NPA recovery team; legal action if required.
+
+4.5 Waiver Policy
+Principal waiver: Not permitted without board approval.
+Interest/penalty waiver: Up to 50% may be waived by Credit Committee for settlement.
+Settlement: One-time settlements accepted for NPA accounts at minimum 60% of outstanding principal.
+
+=== SECTION 5: FRAUD DETECTION POLICY ===
+
+5.1 Document Fraud Indicators
+Red flags for document fraud:
+- Inconsistent fonts or formatting in salary slips
+- Bank statement debits not matching stated employer's sector
+- ITR income significantly higher than industry average for stated profession
+- Address inconsistency across documents
+- Salary credits from an unknown/unregistered entity
+- Round-number salary amounts (e.g., exactly ₹50,000 when market rate varies)
+
+5.2 Identity Fraud Indicators
+- PAN not matching name in credit bureau
+- Date of birth inconsistency across documents
+- Multiple applications from same mobile number with different identities
+- IP address or device associated with known fraud patterns
+- Application submitted from a high-fraud pin code
+
+5.3 Collusion Fraud Indicators
+- Same employer reference for multiple unrelated applicants
+- Common guarantor across multiple applications
+- Identical phone numbers or email addresses across applications
+- Applications submitted in rapid succession from the same agent/branch
+
+5.4 Fraud Decision Policy
+Confirmed fraud: Immediate decline; report to FIU-IND; blacklist applicant.
+Suspected fraud: Refer to fraud team; additional verification required.
+Cleared: Document outcome and proceed with normal underwriting.
+
+=== SECTION 6: LOAN RESTRUCTURING POLICY ===
+
+6.1 Eligibility for Restructuring
+Loans eligible for restructuring must meet:
+- Account in SMA-1 or SMA-2 category (not yet NPA)
+- Borrower must demonstrate temporary financial hardship (job loss, medical emergency, business disruption)
+- Maximum one restructuring per loan
+
+6.2 Restructuring Options
+Option A: EMI holiday — 1 to 3 months, interest continues to accrue.
+Option B: EMI reduction — Extend tenure to reduce EMI by up to 30%.
+Option C: Interest rate reduction — Reduce rate by up to 2% for Grade A borrowers in hardship.
+
+6.3 Post-Restructuring Monitoring
+Restructured accounts must be monitored monthly. Any subsequent default within 12 months triggers NPA classification and legal proceedings.

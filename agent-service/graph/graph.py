@@ -16,10 +16,11 @@ from agents.credit_assessment.agent import run_credit_assessment
 from agents.art_negotiation.agent import run_art_negotiation
 from agents.enach.agent import run_enach
 from agents.esign.agent import run_esign
+from agents.disbursement.agent import run_disbursement
 
 
 def build_graph(checkpointer: AsyncPostgresSaver | None = None) -> StateGraph:
-    """Build and compile the 7-node LangGraph pipeline.
+    """Build and compile the 8-node LangGraph pipeline.
 
     Pipeline:
       lead_capture
@@ -35,6 +36,8 @@ def build_graph(checkpointer: AsyncPostgresSaver | None = None) -> StateGraph:
       enach
         ↓
       esign
+        ↓
+      disbursement
         ↓ END
     """
     builder = StateGraph(ApplicationState)
@@ -47,6 +50,7 @@ def build_graph(checkpointer: AsyncPostgresSaver | None = None) -> StateGraph:
     builder.add_node("art_negotiation",       run_art_negotiation)
     builder.add_node("enach",                 run_enach)
     builder.add_node("esign",                 run_esign)
+    builder.add_node("disbursement",          run_disbursement)
 
     # ── Entry point ────────────────────────────────────────────────────────────
     builder.set_entry_point("lead_capture")
@@ -87,7 +91,8 @@ def build_graph(checkpointer: AsyncPostgresSaver | None = None) -> StateGraph:
     )
 
     builder.add_edge("enach", "esign")
-    builder.add_edge("esign", END)
+    builder.add_edge("esign", "disbursement")
+    builder.add_edge("disbursement", END)
 
     return builder.compile(
         checkpointer=checkpointer,

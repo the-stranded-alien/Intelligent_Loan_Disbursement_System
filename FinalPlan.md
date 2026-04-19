@@ -1,6 +1,6 @@
 # Final Plan — Intelligent Loan Disbursement System
 
-## Status as of 2026-04-19
+## Status as of 2026-04-19 (Session 4 — Final)
 
 All planned features are **complete**. The system is a fully working end-to-end
 intelligent loan disbursement platform. This document tracks what was built across
@@ -174,7 +174,7 @@ frontend/src/
 | AssessmentChat `?session=` param | ✅ Done | Resumes pre-created session instead of starting a new one |
 | `PipelineEvent` type fields added | ✅ Done | `session_id`, `opening`, `reason` added to interface |
 
-### Part 7 — Railway Deployment Fixes & Final Hardening
+### Part 7 — Railway Deployment Fixes, Code Review & Final Hardening
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -234,12 +234,26 @@ frontend/src/
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Part 8 — Complete Code Review & Remaining Work (Session 4)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| **Disbursement agent field names fixed** | ✅ Done | `sanction_amount` → `sanctioned_amount`, `account_number` → `bank_account_number` |
+| **Disbursement exception handler fixed** | ✅ Done | Was logging/returning `"lead_capture"` stage; now correctly uses `"disbursement"` |
+| **Disbursement agent rewritten** | ✅ Done | Uses `call_llm` for metrics, deterministic reference, publishes `node.completed` + `pipeline.completed` |
+| **disbursement.j2 prompt fixed** | ✅ Done | Removed undefined `payment_response` variable; corrected all field names |
+| **graph/state.py — disbursement fields added** | ✅ Done | Added `disbursement_status`, `disbursement_reference`, `disbursement_attempts` to `ApplicationState` |
+| **graph/graph.py — disbursement wired** | ✅ Done | Pipeline now 8 nodes: `esign → disbursement → END`; `run_disbursement` imported and registered |
+| **pgvector RAG policy documents** | ✅ Done | `agent-service/data/`: `rbi_guidelines.txt`, `aml_rules.txt`, `lending_policy.txt` |
+| **embedding_service.py completed** | ✅ Done | `embed()`, `similarity_search()`, `upsert()` implemented using OpenAI `text-embedding-3-small` |
+| **seed_embeddings.py created** | ✅ Done | `agent-service/scripts/seed_embeddings.py` — chunks docs, embeds via OpenAI, upserts to pgvector; idempotent |
+| **Alembic migration 0007** | ✅ Done | Creates `compliance_embeddings` table with `vector(1536)` column + ivfflat index |
+| **`openai` added to agent-service requirements** | ✅ Done | `openai==1.59.0`; `OPENAI_API_KEY` in settings + docker-compose |
+
 ## Remaining Opportunities (Post-MVP)
 
-These items are optional and not blocking:
+One genuinely optional item remains:
 
 | Item | Notes |
 |------|-------|
-| Auth0 integration | Planned in Phase 5; all endpoints currently open |
-| pgvector RAG seeding | compliance_policies collection; `/seed-rag` skill available |
-| Real bank disbursement API | Replace deterministic stub in `retry_disbursement` with live IMPS/NEFT call; retry skeleton already wired |
+| Real bank disbursement API | Replace deterministic stub in `run_disbursement` with live IMPS/NEFT call; the `retry_disbursement` Celery task and retry skeleton are already in place |
