@@ -143,12 +143,18 @@ class AssessmentSession:
         return reply, complete
 
     def _try_parse(self, text: str) -> bool:
+        # Try backtick-fenced JSON first (group 1 = content inside fences)
         m = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-        if not m:
-            m = re.search(r"\{.*?\"assessment_complete\"\s*:\s*true.*?\}", text, re.DOTALL)
         if m:
+            json_str = m.group(1)
+        else:
+            # Fall back to bare JSON object containing assessment_complete
+            m = re.search(r"\{.*?\"assessment_complete\"\s*:\s*true.*?\}", text, re.DOTALL)
+            json_str = m.group(0) if m else None
+
+        if json_str:
             try:
-                data = json.loads(m.group(1) if "```" in text else m.group(0))
+                data = json.loads(json_str)
                 if data.get("assessment_complete"):
                     self.result = data
                     return True

@@ -35,7 +35,7 @@ def run_monitoring_scan() -> list[dict]:
     from db.session import SessionLocal, Application, AuditLog
     from sqlalchemy import func
 
-    db: Session = SessionLocal()
+    db = SessionLocal()
     stale_apps = []
 
     try:
