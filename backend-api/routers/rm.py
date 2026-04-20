@@ -162,8 +162,9 @@ async def submit_review(application_id: str, payload: RMReviewSubmit):
 @router.get("/{application_id}/negotiation-advice")
 async def get_negotiation_advice(application_id: str):
     """
-    Call agent-service to get offer recommendation advice for the RM.
-    Extracts offer data from the audit log (art_negotiation stage result).
+    Return offer recommendation advice for the RM.
+    Reads offer data from the audit log (art_negotiation stage result) and
+    calls Claude inline — no agent-service dependency.
     """
     db = SessionLocal()
     try:
