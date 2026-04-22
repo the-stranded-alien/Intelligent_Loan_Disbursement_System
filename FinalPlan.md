@@ -234,20 +234,36 @@ frontend/src/
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Part 8 — Complete Code Review & Bug Fixes (Session 4)
+### Part 8 — Complete Code Review & Bug Fixes (Session 5)
+
+> Note: disbursement node was intentionally kept out of the LangGraph graph. The pipeline remains 7 nodes (`esign → END`). Disbursement is handled by the `retry_disbursement` Celery task which publishes `pipeline.completed` with `final_status='disbursed'` on success.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| **Disbursement agent field names fixed** | ✅ Done | `sanction_amount` → `sanctioned_amount`, `account_number` → `bank_account_number` |
-| **Disbursement exception handler fixed** | ✅ Done | Was logging/returning `"lead_capture"` stage; now correctly uses `"disbursement"` |
-| **Disbursement agent rewritten** | ✅ Done | Uses `call_llm` for metrics, deterministic reference, publishes `node.completed` + `pipeline.completed` |
-| **disbursement.j2 prompt fixed** | ✅ Done | Removed undefined `payment_response` variable; corrected all field names |
-| **graph/state.py — disbursement fields added** | ✅ Done | Added `disbursement_status`, `disbursement_reference`, `disbursement_attempts` to `ApplicationState` |
-| **graph/graph.py — disbursement wired** | ✅ Done | Pipeline now 8 nodes: `esign → disbursement → END`; `run_disbursement` imported and registered |
+| **`_try_parse_result` / `_try_parse` regex IndexError** | ✅ Fixed | Both `assessment/agent.py` and `assessment_proxy.py` used `m.group(1) if "```" in text else m.group(0)` — when the second regex matched (no capture group) but text happened to contain backticks, `m.group(1)` threw `IndexError` silently, so assessment never completed. Fixed by tracking `json_str` per branch. |
+| **Monitoring agent stale `Session` annotation** | ✅ Fixed | `db: Session = SessionLocal()` — `Session` was never imported. Changed to `db = SessionLocal()`. |
+| **Disbursement agent field names** | ✅ Fixed | `sanction_amount` → `sanctioned_amount`, `account_number` → `bank_account_number` in `agents/disbursement/agent.py` |
+| **Disbursement exception handler stage** | ✅ Fixed | Was logging/setting `"lead_capture"` in the error handler; corrected to `"disbursement"` |
+| **disbursement.j2 undefined variable** | ✅ Fixed | Removed `payment_response` variable (never passed to template); corrected all field names |
+| **Full codebase cross-check** | ✅ Done | All 30+ files audited across agent-service, backend-api, notification-service, and frontend — no remaining bugs found |
+
+### Part 9 — Railway Deployment Fixes (Session 5)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| **`start.sh` startup script** | ✅ Done | Replaces inline CMD; retries `alembic upgrade head` up to 5× with 5s back-off, then starts uvicorn regardless — health check always passes even if DB not yet configured |
+| **Removed `--workers 2`** | ✅ Done | Single-process uvicorn is more stable in Railway's container runtime |
+| **`.dockerignore` for backend-api** | ✅ Done | Prevents `.env` files and `__pycache__` from being bundled into the image |
+| **Root cause of health check failure** | ✅ Identified | Old CMD used `&&`: `alembic upgrade head && uvicorn ...`. If alembic failed (DB race/missing env var), uvicorn never started. Railway restarted 3× per policy → exactly 11 health check failures over 5 min |
+
+---
 
 ## Remaining Opportunities (Post-MVP)
 
 | Item | Notes |
 |------|-------|
-| pgvector RAG seeding | compliance_policies collection; `/seed-rag` skill available |
-| Real bank disbursement API | Replace deterministic stub in `run_disbursement` with live IMPS/NEFT call; the `retry_disbursement` Celery task and retry skeleton are already in place |
+| **Set `DATABASE_URL` on Railway** | Required for DB-backed endpoints to work; `start.sh` will keep retrying migrations on each deploy once it's set |
+| **Set `REDIS_STREAMS_URL` / `REDIS_CELERY_URL` on Railway** | Required for event bus and Celery workers; service starts without them but events won't flow |
+| **Set `ANTHROPIC_API_KEY` on Railway** | Required for all LLM calls (assessment, negotiation, outreach) |
+| **pgvector RAG seeding** | compliance_policies collection; `/seed-rag` skill available |
+| **Real bank disbursement API** | Replace deterministic stub in `retry_disbursement` with live IMPS/NEFT call; retry skeleton already in place |
