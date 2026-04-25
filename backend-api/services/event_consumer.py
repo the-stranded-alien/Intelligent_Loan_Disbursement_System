@@ -183,6 +183,7 @@ class EventConsumer:
             application_id = payload.get("application_id")
             stage = payload.get("stage")
             final_status = payload.get("final_status", "completed")
+            stage_results = payload.get("stage_results", {})
             db = SessionLocal()
             try:
                 app = db.query(Application).filter(Application.id == application_id).first()
@@ -190,6 +191,28 @@ class EventConsumer:
                     app.status = final_status
                     app.current_stage = stage
                     app.updated_at = datetime.now(timezone.utc)
+
+                    # Backfill any stage audit entries that node.completed events may
+                    # have missed (e.g. consumer was down during the pipeline run).
+                    existing = {
+                        row.event_type
+                        for row in db.query(AuditLog.event_type).filter(
+                            AuditLog.application_id == application_id,
+                            AuditLog.event_type.like("stage.%.completed"),
+                        ).all()
+                    }
+                    for s_key, s_result in stage_results.items():
+                        ev_type = f"stage.{s_key}.completed"
+                        if ev_type not in existing:
+                            db.add(AuditLog(
+                                id=str(uuid.uuid4()),
+                                application_id=application_id,
+                                event_type=ev_type,
+                                actor="agent-service",
+                                payload={"stage": s_key, "result": s_result},
+                                created_at=datetime.now(timezone.utc),
+                            ))
+
                     db.commit()
             finally:
                 db.close()
