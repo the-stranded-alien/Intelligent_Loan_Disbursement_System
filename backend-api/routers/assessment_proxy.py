@@ -198,7 +198,42 @@ async def finalize_assessment(session_id: str):
     result = session.get_result()
     if not result:
         raise HTTPException(status_code=400, detail="Assessment not yet complete")
+    application_id = session.application_id
     _sessions.pop(session_id, None)
+
+    # Persist to audit log
+    try:
+        from datetime import datetime, timezone
+        from db.session import SessionLocal
+        from db.models import AuditLog
+        db = SessionLocal()
+        try:
+            db.add(AuditLog(
+                id=str(uuid.uuid4()),
+                application_id=application_id,
+                event_type="assessment.completed",
+                actor="assessment-agent",
+                payload=result,
+                created_at=datetime.now(timezone.utc),
+            ))
+            db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("Failed to save assessment result for %s: %s", application_id, e)
+
+    # Broadcast so StatusTracker updates live
+    try:
+        from services.websocket_manager import websocket_manager
+        await websocket_manager.broadcast(application_id, {
+            "event": "assessment.completed",
+            "recommendation": result.get("recommendation"),
+            "repayment_confidence": result.get("repayment_confidence"),
+            "assessment_notes": result.get("assessment_notes", ""),
+        })
+    except Exception as e:
+        logger.warning("Failed to broadcast assessment result for %s: %s", application_id, e)
+
     return result
 
 

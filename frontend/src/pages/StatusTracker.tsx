@@ -65,6 +65,7 @@ export default function StatusTracker() {
 
   // Auto-started assessment session (from assessment_ready WS event)
   const [autoSessionId, setAutoSessionId] = useState<string | null>(null)
+  const [assessmentDone, setAssessmentDone] = useState<{ recommendation: string; repayment_confidence: string; notes: string } | null>(null)
 
   // Document upload state
   const [uploadFile, setUploadFile]     = useState<File | null>(null)
@@ -98,6 +99,13 @@ export default function StatusTracker() {
       setStatus(s => s ? { ...s, status: 'info_requested' } : s)
     } else if (latest.event === 'assessment_ready' && latest.session_id) {
       setAutoSessionId(latest.session_id as string)
+    } else if (latest.event === 'assessment.completed') {
+      setAutoSessionId(null)
+      setAssessmentDone({
+        recommendation: (latest as any).recommendation ?? '',
+        repayment_confidence: (latest as any).repayment_confidence ?? '',
+        notes: (latest as any).assessment_notes ?? '',
+      })
     } else if (latest.event === 'pipeline.completed' || latest.event === 'hitl.requested') {
       // Full refetch to get accurate final status
       if (appId) fetchStatus(appId)
@@ -315,6 +323,33 @@ export default function StatusTracker() {
               >
                 Start Chat
               </button>
+            </div>
+          )}
+
+          {/* ── Assessment Done Banner ── */}
+          {assessmentDone && (
+            <div className="flex items-start gap-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-4 py-3">
+              <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                  Repayment Assessment Complete
+                  {assessmentDone.recommendation && (
+                    <span className={cn(
+                      'ml-2 text-xs font-medium px-2 py-0.5 rounded-full',
+                      assessmentDone.recommendation === 'approve'
+                        ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                        : assessmentDone.recommendation === 'reject'
+                        ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'
+                        : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300',
+                    )}>
+                      {assessmentDone.recommendation}
+                    </span>
+                  )}
+                </p>
+                {assessmentDone.notes && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-0.5">{assessmentDone.notes}</p>
+                )}
+              </div>
             </div>
           )}
 
