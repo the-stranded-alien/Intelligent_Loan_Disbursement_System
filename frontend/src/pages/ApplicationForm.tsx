@@ -17,7 +17,7 @@ const personalSchema = z.object({
   full_name:                z.string().min(2, 'Name must be at least 2 characters'),
   email:                    z.string().email('Invalid email address'),
   phone:                    z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
-  pan_number:               z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Enter a valid PAN (e.g. ABCDE1234F)'),
+  pan_number:               z.string().regex(/^[A-Z]{3}P[A-Z][0-9]{4}[A-Z]$/, 'Enter a valid individual PAN (e.g. ABCPE1234F)'),
   date_of_birth:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter date as YYYY-MM-DD'),
   city:                     z.string().min(2, 'Enter your city'),
   state:                    z.string().min(2, 'Select your state'),

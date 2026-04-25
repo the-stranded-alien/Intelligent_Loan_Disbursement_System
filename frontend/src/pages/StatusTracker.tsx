@@ -355,11 +355,11 @@ export default function StatusTracker() {
                         </div>
                         <div className="space-y-1">
                           <p className="text-lg font-bold text-brand-600 dark:text-brand-400">
-                            {Number(offer.interest_rate ?? 0).toFixed(1)}%
+                            {Number((offer.interest_rate_percent ?? offer.interest_rate) ?? 0).toFixed(1)}%
                             <span className="text-xs font-normal text-slate-400 ml-1">p.a.</span>
                           </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {offer.tenure_months} months · ₹{Math.round(Number(offer.emi_amount ?? 0)).toLocaleString('en-IN')}/mo
+                            {offer.tenure_months} months · ₹{Math.round(Number((offer.monthly_emi ?? offer.emi_amount) ?? 0)).toLocaleString('en-IN')}/mo
                           </p>
                         </div>
                       </div>

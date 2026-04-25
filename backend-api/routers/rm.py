@@ -34,12 +34,13 @@ async def _negotiation_analyse(data: dict) -> dict:
     """Inline negotiation LLM call — no agent-service dependency."""
     offers_text = ""
     for offer in data.get("offers", []):
+        total_interest = float(offer.get("total_payable", 0)) - float(offer.get("sanctioned_amount", 0))
         offers_text += (
             f"\n**{offer.get('option')}:**\n"
-            f"- Rate: {offer.get('interest_rate')}% p.a.\n"
+            f"- Rate: {offer.get('interest_rate_percent', offer.get('interest_rate', 0))}% p.a.\n"
             f"- Tenure: {offer.get('tenure_months')} months\n"
-            f"- EMI: ₹{_inr(float(offer.get('emi_amount', 0)))} / month\n"
-            f"- Total Interest: ₹{_inr(float(offer.get('total_interest', 0)))}\n"
+            f"- EMI: ₹{_inr(float(offer.get('monthly_emi', offer.get('emi_amount', 0))))} / month\n"
+            f"- Total Interest: ₹{_inr(max(0.0, total_interest))}\n"
         )
 
     employment = (data.get("employment_type") or "salaried").replace("_", " ").title()
