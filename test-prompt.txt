@@ -1,0 +1,374 @@
+You are testing the LoanFlow Intelligent Loan Disbursement System — a full-stack AI application built on LangGraph + FastAPI + React.
+
+The app is open in this browser tab. Your job is to systematically test every feature, record what passes and what fails, and produce a complete TEST_REPORT.md.
+
+Base URL for API calls: use the current page origin (window.location.origin).
+
+---
+
+## INSTRUCTIONS
+
+Work through every section below in order. For each test:
+- Navigate to the page OR run the fetch snippet in the browser console
+- Record the actual result
+- Mark: ✅ PASS | ❌ FAIL | ⚠️ PARTIAL | ⏭️ SKIP (if a prerequisite failed)
+- Note the exact error message if it fails
+
+At the end, produce TEST_REPORT.md using the template at the bottom of this prompt.
+
+---
+
+## SECTION 1 — Infrastructure Health
+
+### 1.1 Backend health check
+```js
+fetch('/health').then(r => r.json()).then(console.log)
+```
+Expected: `{"status": "ok"}`
+
+### 1.2 Database connectivity
+```js
+fetch('/api/v1/analytics/overview').then(r => r.json()).then(console.log)
+```
+Expected: JSON with `total_applications`, `approved`, `rejected`, `pending`, `approval_rate`, `total_approved_amount`
+
+### 1.3 Redis / event bus (indirect — check background agents endpoint)
+```js
+fetch('/api/v1/analytics/background-agents').then(r => r.json()).then(console.log)
+```
+Expected: JSON with `monitoring`, `outreach`, `pipeline`, `assessment` sections. No 500 error.
+
+---
+
+## SECTION 2 — Application Submission (Apply Page)
+
+Navigate to `/`
+
+### 2.1 Page renders
+Check: 2-step form is visible. Step 1 has personal info fields (Full Name, Email, Phone, PAN, DOB, City, State, Residential Status, Years at Address).
+
+### 2.2 Form validation
+- Try clicking Next without filling anything. Expected: validation errors shown.
+- Fill invalid PAN (e.g. "ABC"). Expected: error on PAN format.
+- Fill loan amount below ₹1,000. Expected: validation error.
+
+### 2.3 Submit a SMALL LOAN application (≤ ₹2L — will auto-complete pipeline without HITL)
+
+Fill the form with:
+- Full Name: Test Applicant One
+- Email: test1@loanflow.dev
+- Phone: 9876543210
+- PAN: ABCDE1234F
+- DOB: 1990-05-15
+- City: Mumbai
+- State: Maharashtra
+- Residential Status: owned
+- Years at Address: 5
+- Employment: Salaried
+- Employer: TechCorp India
+- Years in Job: 3
+- Monthly Income: 80000
+- Existing EMIs: 5000
+- Bank Account: 1234567890
+- IFSC: HDFC0001234
+- Loan Amount: 150000  ← SMALL loan (₹1.5L, below ₹2L HITL threshold)
+- Purpose: Home renovation
+- Tenure: 24 months
+
+Submit. Expected: form submits, redirects to status page or shows application ID.
+
+Save the returned application_id as SMALL_APP_ID.
+
+### 2.4 Submit a LARGE LOAN application (> ₹2L — will pause for HITL)
+
+Repeat with:
+- Full Name: Test Applicant Two
+- Email: test2@loanflow.dev
+- PAN: XYZAB9876G
+- Monthly Income: 150000
+- Loan Amount: 500000  ← LARGE loan (₹5L, above ₹2L HITL threshold)
+- All other fields same as above
+
+Save the returned application_id as LARGE_APP_ID.
+
+---
+
+## SECTION 3 — Status Tracker & Pipeline Visibility
+
+Navigate to `/status`
+
+### 3.1 Search for SMALL_APP_ID
+Paste the small loan app ID and click Track.
+Expected: applicant name, loan amount, status badge, pipeline timeline visible.
+
+### 3.2 Eligibility banner
+Expected: green "Eligible — KYC Step Next" banner if lead_capture passed, or red "Not Eligible" banner if rejected. Note which.
+
+### 3.3 Pipeline stage progression (small loan)
+Check WorkflowTimeline shows stages. After ~30–60 seconds (pipeline runs async), refresh and check if `current_stage` advanced.
+
+### 3.4 ART offers card
+If pipeline reached `art_negotiation`, check for the 3-option offers card (Option A / B / C with interest rates and EMIs). Note which option is marked "Recommended".
+
+### 3.5 Live WebSocket indicator
+In NotificationFeed (right column), verify it shows "Live" or connected state. Send the application through again and watch for live `node.started` / `node.completed` events.
+
+### 3.6 Copy ID button
+Click Copy ID. Paste into a text editor to verify it copies correctly.
+
+---
+
+## SECTION 4 — RM Dashboard
+
+Navigate to `/rm`
+
+### 4.1 Queue loads
+```js
+fetch('/api/v1/rm/queue').then(r => r.json()).then(console.log)
+```
+Expected: array (may be empty if no pending_review apps yet).
+
+### 4.2 Submit LARGE_APP_ID for RM review context
+```js
+fetch(`/api/v1/rm/LARGE_APP_ID/context`).then(r => r.json()).then(console.log)
+```
+Expected: `application` object + `audit_trail` array.
+
+### 4.3 Negotiation advice (requires art_negotiation stage to have completed first)
+```js
+fetch(`/api/v1/rm/LARGE_APP_ID/negotiation-advice`).then(r => r.json()).then(console.log)
+```
+Expected: `recommended_option`, `recommendation_reason`, `risk_analysis`, `dti_after_loan`, `affordability_verdict`, `counter_offer_note`.
+If 404 "No offer data found" → art_negotiation hasn't run yet, mark ⏭️ SKIP and retry after pipeline advances.
+
+### 4.4 Counter-offer simulator
+```js
+fetch(`/api/v1/rm/LARGE_APP_ID/counter-offer`, {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({ rate: 13.5, tenure_months: 36 })
+}).then(r => r.json()).then(console.log)
+```
+Expected: `monthly_emi`, `total_payable`, `total_interest`, `processing_fee`.
+
+### 4.5 RM submits APPROVE on LARGE_APP_ID
+First confirm large loan is in `pending_review` status:
+```js
+fetch(`/api/v1/applications/LARGE_APP_ID/status`).then(r => r.json()).then(d => console.log(d.status))
+```
+If `pending_review`, submit approve:
+```js
+fetch(`/api/v1/rm/LARGE_APP_ID/review`, {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({ decision: 'approve', notes: 'Approved by test run' })
+}).then(r => r.json()).then(console.log)
+```
+Expected: `{"application_id": "...", "decision": "approve", "status": "approved"}`
+Expected downstream: status → `approved`, pipeline resumes through art_negotiation → enach → esign.
+
+### 4.6 NegotiationPanel UI
+In the RM Dashboard UI, click on an application in the queue (if any). Verify NegotiationPanel auto-loads advice and shows the counter-offer simulator inputs.
+
+---
+
+## SECTION 5 — Assessment Chat
+
+### 5.1 Start assessment session manually
+```js
+fetch(`/api/v1/applications/SMALL_APP_ID/status`).then(r => r.json()).then(d => {
+  return fetch(`/api/v1/assessment/SMALL_APP_ID/start`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ applicant_data: d })
+  })
+}).then(r => r.json()).then(d => { window._sid = d.session_id; console.log(d) })
+```
+Expected: `session_id` + `opening` message from Priya.
+
+### 5.2 Retrieve session metadata
+```js
+fetch(`/api/v1/assessment/session/${window._sid}`).then(r => r.json()).then(console.log)
+```
+Expected: session_id, application_id, opening text.
+
+### 5.3 Navigate to Assessment Chat page
+Go to `/assessment/SMALL_APP_ID?session=SESSION_ID`
+Expected: Priya's opening message visible. Input box enabled.
+
+### 5.4 Chat through 5 questions
+Send these messages one by one and wait for each response:
+1. "Yes, I'm a salaried employee at TechCorp, income is very stable."
+2. "I have no major upcoming expenses in the next year."
+3. "I have 3 months of savings set aside as emergency fund to cover EMIs if needed."
+4. "The loan is for home renovation — I'm upgrading my kitchen and bathroom."
+5. "Yes, I have a fixed deposit of ₹2 lakhs I can liquidate if needed."
+
+Expected: After message 5, Priya's reply should contain the final JSON block and `is_complete: true` in the WS response.
+
+### 5.5 Finalize assessment
+```js
+fetch(`/api/v1/assessment/${window._sid}/finalize`, {method:'POST'}).then(r => r.json()).then(console.log)
+```
+Expected: `repayment_confidence`, `recommendation`, `risk_flags`, `assessment_notes`, `conversation_summary`.
+
+---
+
+## SECTION 6 — Document Upload
+
+### 6.1 Upload a test document via UI
+Navigate to `/status/SMALL_APP_ID`. If status is `info_requested` or `processing`, the document upload card should appear.
+
+Create a tiny test file in console:
+```js
+const blob = new Blob(['test pdf content'], {type: 'application/pdf'})
+const file = new File([blob], 'test_salary_slip.pdf', {type: 'application/pdf'})
+const form = new FormData()
+form.append('file', file)
+form.append('document_type', 'salary_slip')
+fetch(`/api/v1/documents/SMALL_APP_ID/upload`, {method:'POST', body: form})
+  .then(r => r.json()).then(console.log)
+```
+Expected: `document_id`, `document_type: "salary_slip"`, `verification_status: "pending"`.
+
+### 6.2 List documents
+```js
+fetch(`/api/v1/documents/SMALL_APP_ID`).then(r => r.json()).then(console.log)
+```
+Expected: array containing the uploaded document.
+
+---
+
+## SECTION 7 — Applications List
+
+Navigate to `/applications`
+
+### 7.1 Page renders and shows applications
+Expected: table/list with both test applications visible. Columns: applicant name, loan amount, status, stage.
+
+### 7.2 Status badges display correctly
+Expected: status values show as human-readable badges (pending, processing, info_requested, pending_review, approved, rejected, completed).
+
+---
+
+## SECTION 8 — Analytics
+
+Navigate to `/analytics`
+
+### 8.1 Overview card
+```js
+fetch('/api/v1/analytics/overview').then(r => r.json()).then(console.log)
+```
+Expected: counts for total, approved, rejected, pending. approval_rate is a percentage.
+
+### 8.2 Pipeline stage breakdown
+```js
+fetch('/api/v1/analytics/pipeline').then(r => r.json()).then(console.log)
+```
+Expected: array of 7 objects, one per stage (lead_capture → esign).
+
+### 8.3 Per-agent rejection rates
+```js
+fetch('/api/v1/analytics/agents').then(r => r.json()).then(console.log)
+```
+Expected: `stages` array, `pending_hitl_review` count, `avg_loan_amount`.
+
+### 8.4 Disbursement metrics
+```js
+fetch('/api/v1/analytics/disbursements').then(r => r.json()).then(console.log)
+```
+Expected: `total_disbursed`, `total_amount`, `avg_loan_amount`.
+
+### 8.5 Analytics UI
+Verify charts/numbers render on the page. No blank sections, no error states.
+
+---
+
+## SECTION 9 — Agent Activity Page
+
+Navigate to `/agents`
+
+### 9.1 Background agents endpoint
+```js
+fetch('/api/v1/analytics/background-agents').then(r => r.json()).then(console.log)
+```
+Expected: four sections — monitoring (flagged count + recent), outreach (sent count + recent), pipeline (node completions + recent), assessment (awaiting_chat count).
+
+### 9.2 UI renders all four sections
+Navigate to `/agents`. Expected: Monitoring Agent, Outreach Agent, Pipeline Completions, Assessment sections all visible with their data.
+
+---
+
+## SECTION 10 — Known Incomplete Features (Verify Current Behaviour)
+
+These are documented gaps — test that they behave as expected (graceful, not crashing).
+
+### 10.1 Disbursement trigger (known gap)
+After SMALL_APP_ID completes the pipeline (`current_stage: esign`, `status: completed`):
+```js
+fetch(`/api/v1/applications/SMALL_APP_ID/status`).then(r => r.json()).then(d => console.log('status:', d.status, 'stage:', d.current_stage))
+```
+Expected current behaviour: status stays `completed`, never transitions to `disbursed`.
+Note: `retry_disbursement` Celery task exists but is never triggered — known gap.
+
+### 10.2 Assessment result downstream (known gap)
+After finalize_assessment returns a result (Section 5.5), check app status:
+```js
+fetch(`/api/v1/applications/SMALL_APP_ID/status`).then(r => r.json()).then(d => console.log('status after assessment:', d.status))
+```
+Expected current behaviour: status unchanged (still `info_requested` or whatever it was).
+Note: finalize_assessment returns JSON but writes nothing to DB — known gap.
+
+### 10.3 Webhook endpoints (passive)
+```js
+fetch('/webhook/disburse/callback', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({application_id: 'SMALL_APP_ID', status: 'success'})
+}).then(r => r.json()).then(console.log)
+```
+Expected: `{"received": true}` — endpoint accepts callbacks but no business logic beyond DB write.
+
+---
+
+## OUTPUT FORMAT
+
+After completing all tests, produce a TEST_REPORT.md file with this exact structure:
+
+```
+# LoanFlow Test Report
+**Date:** [today]
+**Tester:** Claude (automated)
+**Base URL:** [the URL you tested against]
+
+## Summary
+| Category | Pass | Fail | Partial | Skip |
+|----------|------|------|---------|------|
+| Infrastructure | | | | |
+| Application Submission | | | | |
+| Status Tracker | | | | |
+| RM Dashboard | | | | |
+| Assessment Chat | | | | |
+| Document Upload | | | | |
+| Applications List | | | | |
+| Analytics | | | | |
+| Agent Activity | | | | |
+| Known Gaps (verified) | | | | |
+| **TOTAL** | | | | |
+
+## Detailed Results
+
+[For each test: test ID, name, expected, actual, status, notes]
+
+## Issues Found (non-gap failures)
+
+[List any unexpected failures — things that should work but don't]
+
+## Known Gaps — Confirmed Behaviour
+
+[List the known incomplete features and confirm they behave as documented]
+
+## Verdict
+
+[Overall assessment: is the app demo-ready? What blocks production use?]
+```
