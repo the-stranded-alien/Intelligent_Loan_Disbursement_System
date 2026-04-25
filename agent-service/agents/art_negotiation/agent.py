@@ -14,6 +14,33 @@ logger = logging.getLogger(__name__)
 
 AGENT_ROLE = "planner"
 
+
+def _emi(principal: float, annual_rate_pct: float, tenure_months: int) -> float:
+    """Standard reducing-balance EMI formula."""
+    if tenure_months <= 0 or principal <= 0:
+        return 0.0
+    if annual_rate_pct <= 0:
+        return round(principal / tenure_months, 2)
+    r = annual_rate_pct / 12 / 100
+    return round(principal * r * (1 + r) ** tenure_months / ((1 + r) ** tenure_months - 1), 2)
+
+
+def _recompute_offer(offer: dict) -> dict:
+    """Replace LLM-computed financials with exact Python calculations."""
+    principal = float(offer.get("sanctioned_amount", 0))
+    rate      = float(offer.get("interest_rate_percent", 10.5))
+    tenure    = int(offer.get("tenure_months", 12))
+    emi       = _emi(principal, rate, tenure)
+    credit_score = offer.get("_credit_score", 700)
+    fee_pct   = 0.02 if credit_score < 650 else 0.01
+    return {
+        **offer,
+        "monthly_emi":    emi,
+        "total_payable":  round(emi * tenure, 2),
+        "total_interest": round(emi * tenure - principal, 2),
+        "processing_fee": round(principal * fee_pct, 2),
+    }
+
 _PROMPT_PATH = Path(__file__).parent.parent.parent / "config" / "prompts" / "art_negotiation.j2"
 
 
@@ -71,34 +98,47 @@ async def run_art_negotiation(state: ApplicationState) -> ApplicationState:
         )
         result = parse_llm_json(response.content[0].text)
 
+        # Recompute all financial fields in Python — LLM arithmetic is unreliable
+        credit_score = state.get("credit_score") or 700
+        raw_offers = result.get("negotiation_offers", [])
+        offers = [
+            _recompute_offer({**o, "_credit_score": credit_score})
+            for o in raw_offers
+        ]
+        # Strip the internal helper key
+        for o in offers:
+            o.pop("_credit_score", None)
+
+        selected_option = result.get("selected_option", "B")
+        selected = next(
+            (o for o in offers if o.get("option") == selected_option),
+            offers[0] if offers else {},
+        )
+
         updated_state = {
             **state,
             "current_stage": "art_negotiation",
             "hitl_required": hitl_required,
-            "negotiation_offers": result.get("negotiation_offers", []),
-            "selected_offer": next(
-                (o for o in result.get("negotiation_offers", [])
-                 if o.get("option") == result.get("selected_option", "B")),
-                result.get("negotiation_offers", [{}])[0] if result.get("negotiation_offers") else {},
-            ),
-            "sanctioned_amount": float(result.get("sanctioned_amount", 0)),
-            "interest_rate_percent": float(result.get("interest_rate_percent", 0)),
-            "monthly_emi": float(result.get("monthly_emi", 0)),
-            "total_payable": float(result.get("total_payable", 0)),
-            "processing_fee": float(result.get("processing_fee", 0)),
+            "negotiation_offers": offers,
+            "selected_offer": selected,
+            "sanctioned_amount":    float(selected.get("sanctioned_amount", 0)),
+            "interest_rate_percent": float(selected.get("interest_rate_percent", 0)),
+            "monthly_emi":          float(selected.get("monthly_emi", 0)),
+            "total_payable":        float(selected.get("total_payable", 0)),
+            "processing_fee":       float(selected.get("processing_fee", 0)),
             "stage_results": {
                 **state.get("stage_results", {}),
                 "art_negotiation": {
-                    "sanctioned_amount": result.get("sanctioned_amount"),
-                    "interest_rate_percent": result.get("interest_rate_percent"),
-                    "monthly_emi": result.get("monthly_emi"),
-                    "total_payable": result.get("total_payable"),
-                    "processing_fee": result.get("processing_fee"),
-                    "selected_option": result.get("selected_option"),
-                    "offer_count": len(result.get("negotiation_offers", [])),
-                    "planner_notes": result.get("planner_notes"),
-                    "offers": result.get("negotiation_offers", []),
-                    "recommended_option": result.get("selected_option"),
+                    "sanctioned_amount":    selected.get("sanctioned_amount"),
+                    "interest_rate_percent": selected.get("interest_rate_percent"),
+                    "monthly_emi":          selected.get("monthly_emi"),
+                    "total_payable":        selected.get("total_payable"),
+                    "processing_fee":       selected.get("processing_fee"),
+                    "selected_option":      selected_option,
+                    "offer_count":          len(offers),
+                    "planner_notes":        result.get("planner_notes"),
+                    "offers":               offers,
+                    "recommended_option":   selected_option,
                     **metrics,
                 },
             },

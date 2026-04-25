@@ -39,6 +39,7 @@ Compute 3 loan offer options for negotiation. Each offer has a different Amount-
 ### Select the best offer (Option B as default unless RM specified otherwise).
 
 Respond with a JSON object only. No prose outside the JSON.
+EMI, total_payable, and processing_fee will be recomputed by the system — just provide sanctioned_amount, interest_rate_percent, and tenure_months accurately.
 
 ```json
 {
@@ -48,39 +49,24 @@ Respond with a JSON object only. No prose outside the JSON.
       "label": "Conservative",
       "sanctioned_amount": <number>,
       "interest_rate_percent": <number, 1 decimal>,
-      "tenure_months": <integer>,
-      "monthly_emi": <number, 2 decimal>,
-      "total_payable": <number, 2 decimal>,
-      "processing_fee": <number, 2 decimal>
+      "tenure_months": <integer>
     },
     {
       "option": "B",
       "label": "Balanced",
       "sanctioned_amount": <number>,
       "interest_rate_percent": <number, 1 decimal>,
-      "tenure_months": <integer>,
-      "monthly_emi": <number, 2 decimal>,
-      "total_payable": <number, 2 decimal>,
-      "processing_fee": <number, 2 decimal>
+      "tenure_months": <integer>
     },
     {
       "option": "C",
       "label": "Extended",
       "sanctioned_amount": <number>,
       "interest_rate_percent": <number, 1 decimal>,
-      "tenure_months": <integer>,
-      "monthly_emi": <number, 2 decimal>,
-      "total_payable": <number, 2 decimal>,
-      "processing_fee": <number, 2 decimal>
+      "tenure_months": <integer>
     }
   ],
   "selected_option": "B",
-  "sanctioned_amount": <selected offer sanctioned_amount>,
-  "interest_rate_percent": <selected offer rate>,
-  "tenure_months": <selected offer tenure>,
-  "monthly_emi": <selected offer emi>,
-  "total_payable": <selected offer total>,
-  "processing_fee": <selected offer fee>,
   "planner_notes": "<why this offer was selected and key considerations>"
 }
 ```
