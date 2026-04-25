@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from db.session import SessionLocal
-from db.models import Application, AuditLog
+from db.models import Application, AuditLog, AgentTrace
 from services.event_publisher import event_publisher
 
 router = APIRouter()
@@ -187,6 +187,39 @@ async def get_application_events(application_id: str):
         return [
             {"event": l.event_type, "actor": l.actor, "payload": l.payload, "at": str(l.created_at)}
             for l in logs
+        ]
+    finally:
+        db.close()
+
+
+@router.get("/{application_id}/traces")
+async def get_application_traces(application_id: str):
+    db = SessionLocal()
+    try:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+        traces = (
+            db.query(AgentTrace)
+            .filter(AgentTrace.application_id == application_id)
+            .order_by(AgentTrace.created_at)
+            .all()
+        )
+        return [
+            {
+                "id": t.id,
+                "agent_role": t.agent_role,
+                "node_name": t.node_name,
+                "prompt_rendered": t.prompt_rendered,
+                "raw_llm_response": t.raw_llm_response,
+                "parsed_output": t.parsed_output,
+                "duration_ms": t.duration_ms,
+                "model": t.model,
+                "input_tokens": t.input_tokens,
+                "output_tokens": t.output_tokens,
+                "created_at": str(t.created_at),
+            }
+            for t in traces
         ]
     finally:
         db.close()

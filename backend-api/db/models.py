@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Integer, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, DateTime, Text, JSON, ForeignKey, Index
 from sqlalchemy.orm import DeclarativeBase, relationship
 from datetime import datetime
 import uuid
@@ -73,4 +73,21 @@ class AuditLog(Base):
     event_type = Column(String, nullable=False)
     actor = Column(String)
     payload = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AgentTrace(Base):
+    __tablename__ = "agent_traces"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    application_id = Column(String, ForeignKey("applications.id"), nullable=True)
+    agent_role = Column(String, nullable=False)   # planner | analyst | critic | coordinator
+    node_name = Column(String, nullable=False)
+    prompt_rendered = Column(Text)
+    raw_llm_response = Column(Text)
+    parsed_output = Column(JSON)
+    duration_ms = Column(Integer)
+    model = Column(String)
+    input_tokens = Column(Integer)
+    output_tokens = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)

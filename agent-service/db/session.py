@@ -53,3 +53,20 @@ class AuditLog(Base):
     actor = Column(String)
     payload = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AgentTrace(Base):
+    __tablename__ = "agent_traces"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    application_id = Column(String, nullable=True)
+    agent_role = Column(String, nullable=False)
+    node_name = Column(String, nullable=False)
+    prompt_rendered = Column(Text)
+    raw_llm_response = Column(Text)
+    parsed_output = Column(JSON)
+    duration_ms = Column(Integer)
+    model = Column(String)
+    input_tokens = Column(Integer)
+    output_tokens = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)

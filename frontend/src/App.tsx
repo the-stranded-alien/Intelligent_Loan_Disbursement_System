@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   Moon, Sun, Zap, Menu, X,
-  FileText, LayoutList, Activity, Users, BarChart2, Bot,
+  FileText, LayoutList, Activity, Users, BarChart2, Bot, FlaskConical,
 } from 'lucide-react'
 import ApplicationForm from '@/pages/ApplicationForm'
 import StatusTracker from '@/pages/StatusTracker'
@@ -11,6 +11,7 @@ import Analytics from '@/pages/Analytics'
 import ApplicationsList from '@/pages/ApplicationsList'
 import AssessmentChat from '@/pages/AssessmentChat'
 import AgentActivity from '@/pages/AgentActivity'
+import EvaluationDashboard from '@/pages/EvaluationDashboard'
 
 const navItems = [
   { to: '/',            label: 'Apply',        icon: FileText },
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/rm',          label: 'RM Dashboard', icon: Users },
   { to: '/analytics',   label: 'Analytics',    icon: BarChart2 },
   { to: '/agents',      label: 'Agents',       icon: Bot },
+  { to: '/eval',        label: 'Eval',         icon: FlaskConical },
 ]
 
 export default function App() {
@@ -148,6 +150,7 @@ export default function App() {
             <Route path="/applications"                    element={<ApplicationsList />} />
             <Route path="/assessment/:applicationId"       element={<AssessmentChat />} />
             <Route path="/agents"                          element={<AgentActivity />} />
+            <Route path="/eval"                            element={<EvaluationDashboard />} />
           </Routes>
         </main>
 

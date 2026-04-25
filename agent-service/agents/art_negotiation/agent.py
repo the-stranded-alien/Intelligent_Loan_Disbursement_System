@@ -9,6 +9,7 @@ from config.settings import settings
 from services.event_publisher import event_publisher
 from services.json_parser import parse_llm_json
 from services.llm_utils import call_llm
+from services.trace_logger import log_trace
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,10 @@ async def run_art_negotiation(state: ApplicationState) -> ApplicationState:
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         )
-        result = parse_llm_json(response.content[0].text)
+        raw = response.content[0].text
+        result = parse_llm_json(raw)
+        log_trace(application_id=application_id, agent_role=AGENT_ROLE, node_name="art_negotiation",
+                  prompt=prompt, raw_response=raw, parsed_output=result, metrics=metrics)
 
         # Recompute all financial fields in Python — LLM arithmetic is unreliable
         credit_score = state.get("credit_score") or 700

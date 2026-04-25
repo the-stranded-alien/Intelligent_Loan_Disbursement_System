@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from sqlalchemy import func, desc
 
 from db.session import SessionLocal
-from db.models import Application, AuditLog
+from db.models import Application, AuditLog, AgentTrace
 
 router = APIRouter()
 
@@ -162,6 +162,64 @@ async def get_background_agent_activity():
             },
             "assessment": {
                 "awaiting_chat": awaiting_assessment,
+            },
+        }
+    finally:
+        db.close()
+
+
+@router.get("/evaluation")
+async def get_evaluation_metrics():
+    """Per-node aggregated metrics from agent_traces: token usage, latency, call count."""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(
+                AgentTrace.node_name,
+                AgentTrace.agent_role,
+                func.count(AgentTrace.id).label("call_count"),
+                func.avg(AgentTrace.duration_ms).label("avg_latency_ms"),
+                func.avg(AgentTrace.input_tokens).label("avg_input_tokens"),
+                func.avg(AgentTrace.output_tokens).label("avg_output_tokens"),
+                func.sum(AgentTrace.input_tokens).label("total_input_tokens"),
+                func.sum(AgentTrace.output_tokens).label("total_output_tokens"),
+            )
+            .group_by(AgentTrace.node_name, AgentTrace.agent_role)
+            .order_by(AgentTrace.node_name)
+            .all()
+        )
+
+        # Pipeline-level stats from application table
+        total_apps = db.query(func.count(Application.id)).scalar() or 0
+        hitl_apps  = db.query(func.count(Application.id)).filter(
+            Application.status.in_(["pending_review", "approved", "completed"])
+        ).scalar() or 0
+        completed  = db.query(func.count(Application.id)).filter(
+            Application.status.in_(["completed", "disbursed"])
+        ).scalar() or 0
+        rejected   = db.query(func.count(Application.id)).filter(
+            Application.status == "rejected"
+        ).scalar() or 0
+
+        return {
+            "per_node": [
+                {
+                    "node_name":          r.node_name,
+                    "agent_role":         r.agent_role,
+                    "call_count":         r.call_count,
+                    "avg_latency_ms":     round(float(r.avg_latency_ms or 0), 1),
+                    "avg_input_tokens":   round(float(r.avg_input_tokens or 0), 1),
+                    "avg_output_tokens":  round(float(r.avg_output_tokens or 0), 1),
+                    "total_input_tokens": int(r.total_input_tokens or 0),
+                    "total_output_tokens": int(r.total_output_tokens or 0),
+                }
+                for r in rows
+            ],
+            "pipeline": {
+                "total_applications":  total_apps,
+                "hitl_rate_pct":       round(hitl_apps / total_apps * 100, 1) if total_apps else 0,
+                "completion_rate_pct": round(completed  / total_apps * 100, 1) if total_apps else 0,
+                "rejection_rate_pct":  round(rejected   / total_apps * 100, 1) if total_apps else 0,
             },
         }
     finally:

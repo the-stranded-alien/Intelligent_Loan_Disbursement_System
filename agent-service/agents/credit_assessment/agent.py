@@ -8,6 +8,7 @@ from config.settings import settings
 from services.event_publisher import event_publisher
 from services.json_parser import parse_llm_json
 from services.llm_utils import call_llm
+from services.trace_logger import log_trace
 from agents.credit_assessment.tools import CIBIL_TOOL_SCHEMA, mock_cibil_lookup
 
 logger = logging.getLogger(__name__)
@@ -154,6 +155,8 @@ async def run_credit_assessment(state: ApplicationState) -> ApplicationState:
             metrics = metrics_t1
 
         result = parse_llm_json(result_text)
+        log_trace(application_id=application_id, agent_role=AGENT_ROLE, node_name="credit_assessment",
+                  prompt=_user_message(state), raw_response=result_text, parsed_output=result, metrics=metrics)
 
         raw_dti = result.get("dti_ratio", 0)
         dti_pct = round(float(raw_dti) * 100, 1) if float(raw_dti) <= 1 else round(float(raw_dti), 1)
