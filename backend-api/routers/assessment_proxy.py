@@ -117,7 +117,7 @@ class AssessmentSession:
         self.application_id = application_id
         self.history: list[dict] = []
         self._system        = _build_system_prompt(applicant_data)
-        self._client        = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self._client        = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key or None)
         self.opening        = ""
         self.result: dict | None = None
 

@@ -71,7 +71,7 @@ Respond with ONLY a JSON object:
 }}
 ```"""
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key or None)
     response = await client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=512,
