@@ -84,8 +84,9 @@ function QueueCard({
 
 export default function RMDashboard() {
   const navigate = useNavigate()
-  const [queue, setQueue]           = useState<QueueItem[]>([])
-  const [selected, setSelected]     = useState<QueueItem | null>(null)
+  const [queue, setQueue]                   = useState<QueueItem[]>([])
+  const [selected, setSelected]             = useState<QueueItem | null>(null)
+  const [assessmentDone, setAssessmentDone] = useState(false)
   const [form, setForm]             = useState<ReviewForm>({ decision: 'approve', notes: '' })
   const [submitting, setSubmitting] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
@@ -102,6 +103,18 @@ export default function RMDashboard() {
   }
 
   useEffect(() => { loadQueue() }, [])
+
+  async function selectApplication(item: QueueItem) {
+    setSelected(item)
+    setAssessmentDone(false)
+    try {
+      const res = await fetch(`/api/v1/applications/${item.application_id}/events`)
+      if (res.ok) {
+        const evts: { event: string }[] = await res.json()
+        setAssessmentDone(evts.some(e => e.event === 'assessment.completed'))
+      }
+    } catch {}
+  }
 
   async function submitReview() {
     if (!selected) return
@@ -186,7 +199,7 @@ export default function RMDashboard() {
               key={item.application_id}
               item={item}
               selected={selected?.application_id === item.application_id}
-              onClick={() => { setSelected(item); setError('') }}
+              onClick={() => { selectApplication(item); setError('') }}
             />
           ))}
         </div>
@@ -221,14 +234,21 @@ export default function RMDashboard() {
                 </div>
               </div>
 
-              {/* Start Assessment button */}
-              <button
-                onClick={() => navigate(`/assessment/${selected.application_id}`)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors w-full sm:w-auto"
-              >
-                <MessageSquare size={14} />
-                Start Repayment Assessment
-              </button>
+              {/* Assessment button — hidden once done */}
+              {assessmentDone ? (
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium w-full sm:w-auto">
+                  <CheckCircle2 size={14} />
+                  Assessment Complete
+                </div>
+              ) : (
+                <button
+                  onClick={() => navigate(`/assessment/${selected.application_id}`)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors w-full sm:w-auto"
+                >
+                  <MessageSquare size={14} />
+                  Start Repayment Assessment
+                </button>
+              )}
 
               {/* AI context + simulator */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

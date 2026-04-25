@@ -222,14 +222,52 @@ async def finalize_assessment(session_id: str):
     except Exception as e:
         logger.warning("Failed to save assessment result for %s: %s", application_id, e)
 
+    # Act on the recommendation — update status and optionally resume pipeline
+    recommendation = result.get("recommendation", "review")
+    new_status: str | None = None
+    try:
+        from datetime import datetime, timezone
+        from db.session import SessionLocal
+        from db.models import Application
+        db2 = SessionLocal()
+        try:
+            app = db2.query(Application).filter(Application.id == application_id).first()
+            if app:
+                if recommendation == "reject":
+                    app.status = "rejected"
+                    new_status = "rejected"
+                elif recommendation == "approve" and app.status == "pending_review":
+                    app.status = "approved"
+                    new_status = "approved"
+                    # Trigger agent-service to resume the pipeline
+                    from services.event_publisher import event_publisher
+                    event_publisher.publish(
+                        stream="loan:hitl:decisions",
+                        event_type="hitl.decision",
+                        payload={
+                            "application_id": application_id,
+                            "decision": "approve",
+                            "notes": result.get("assessment_notes", "Approved via repayment assessment"),
+                            "rm_id": "assessment-agent",
+                        },
+                    )
+                if new_status:
+                    app.updated_at = datetime.now(timezone.utc)
+                    db2.commit()
+        finally:
+            db2.close()
+    except Exception as e:
+        logger.warning("Failed to update status after assessment for %s: %s", application_id, e)
+
     # Broadcast so StatusTracker updates live
     try:
         from services.websocket_manager import websocket_manager
         await websocket_manager.broadcast(application_id, {
             "event": "assessment.completed",
-            "recommendation": result.get("recommendation"),
+            "recommendation": recommendation,
             "repayment_confidence": result.get("repayment_confidence"),
             "assessment_notes": result.get("assessment_notes", ""),
+            **({"new_status": new_status} if new_status else {}),
         })
     except Exception as e:
         logger.warning("Failed to broadcast assessment result for %s: %s", application_id, e)

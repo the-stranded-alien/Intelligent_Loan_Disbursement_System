@@ -106,6 +106,8 @@ export default function StatusTracker() {
         repayment_confidence: (latest as any).repayment_confidence ?? '',
         notes: (latest as any).assessment_notes ?? '',
       })
+      // Refetch if status changed (approve/reject)
+      if ((latest as any).new_status && appId) fetchStatus(appId)
     } else if (latest.event === 'pipeline.completed' || latest.event === 'hitl.requested') {
       // Full refetch to get accurate final status
       if (appId) fetchStatus(appId)
@@ -263,7 +265,7 @@ export default function StatusTracker() {
               {status.status.replace('_', ' ')}
             </span>
 
-            {status.status === 'pending_review' && (
+            {status.status === 'pending_review' && !assessmentDone && !events.some(e => e.event === 'assessment.completed') && (
               <button
                 onClick={() => navigate(`/assessment/${status.application_id}`)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium transition-colors flex-shrink-0"
