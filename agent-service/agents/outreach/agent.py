@@ -59,7 +59,7 @@ async def run_outreach(payload: dict) -> dict:
 
     # 1. Render Jinja2 prompt and call Claude
     prompt = _render_prompt(payload)
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key or None)
 
     response = await client.messages.create(
         model="claude-sonnet-4-6",

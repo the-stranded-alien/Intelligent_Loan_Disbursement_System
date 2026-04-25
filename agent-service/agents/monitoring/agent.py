@@ -19,6 +19,7 @@ STALE_THRESHOLDS: dict[str, int] = {
     "pending":        2,    # hours — submitted but pipeline never started
     "processing":     1,    # hours — pipeline running but no update for 1h (likely stuck)
     "pending_review": 24,   # hours — HITL requested but RM hasn't acted
+    "info_requested": 24,   # hours — applicant hasn't completed assessment chat
 }
 
 # Max outreach attempts before we stop (checked via audit_log count)
@@ -40,9 +41,10 @@ def run_monitoring_scan() -> list[dict]:
 
     try:
         now = datetime.now(timezone.utc)
+        now_naive = now.replace(tzinfo=None)   # DB stores naive UTC datetimes
 
         for status, hours in STALE_THRESHOLDS.items():
-            cutoff = now - timedelta(hours=hours)
+            cutoff = now_naive - timedelta(hours=hours)
 
             apps = (
                 db.query(Application)
