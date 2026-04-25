@@ -189,10 +189,14 @@ export default function EvaluationDashboard() {
     try {
       const res = await fetch(`/api/v1/applications/${appId.trim()}/traces`)
       if (res.status === 404) { setTraceError('Application not found'); return }
-      if (!res.ok) { setTraceError('Failed to load traces'); return }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setTraceError(body.detail || `Error ${res.status} — check that the backend is running`)
+        return
+      }
       const data: Trace[] = await res.json()
       if (data.length === 0) {
-        setTraceError('No traces found — run a pipeline after deploying this update.')
+        setTraceError('No traces yet for this application. Traces are recorded on pipelines run after the latest deploy — submit a new application to generate them.')
         return
       }
       // Sort by pipeline order

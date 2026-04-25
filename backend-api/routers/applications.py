@@ -199,12 +199,16 @@ async def get_application_traces(application_id: str):
         app = db.query(Application).filter(Application.id == application_id).first()
         if not app:
             raise HTTPException(status_code=404, detail="Application not found")
-        traces = (
-            db.query(AgentTrace)
-            .filter(AgentTrace.application_id == application_id)
-            .order_by(AgentTrace.created_at)
-            .all()
-        )
+        try:
+            traces = (
+                db.query(AgentTrace)
+                .filter(AgentTrace.application_id == application_id)
+                .order_by(AgentTrace.created_at)
+                .all()
+            )
+        except Exception:
+            # agent_traces table not yet migrated on this environment
+            return []
         return [
             {
                 "id": t.id,
