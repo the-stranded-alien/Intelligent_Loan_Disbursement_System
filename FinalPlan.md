@@ -258,12 +258,38 @@ frontend/src/
 
 ---
 
+---
+
+## What's Still Incomplete (Core Business Logic)
+
+### Critical — Broken flows
+
+| Gap | Root Cause | Fix Required |
+|-----|-----------|--------------|
+| **Disbursement never fires** | After `pipeline.completed` with `final_status='completed'`, `backend-api/services/event_consumer.py` sets `app.status = 'completed'` and stops. Nobody calls `retry_disbursement.delay(application_id)`. The Celery task exists but is never enqueued. | After the `pipeline.completed` handler in `event_consumer.py` (or at the end of `run_pipeline` / `resume_pipeline` in `tasks.py`), call `retry_disbursement.delay(application_id)` when `final_status == 'completed'`. |
+| **Assessment result discarded** | `POST /{session_id}/finalize` returns the result JSON and deletes the session — that's it. No event published, no DB update, no pipeline continuation. Application stays in `info_requested` status forever regardless of whether Priya recommended approve or reject. | After `finalize_assessment`, write the result to `AuditLog`, update `app.status` based on `recommendation` (e.g. `processing` if approve/review to continue pipeline, `rejected` if reject), and publish a `assessment.completed` event so the frontend updates live. |
+
+### Significant — Missing logic
+
+| Gap | Root Cause | Fix Required |
+|-----|-----------|--------------|
+| **RM `request_info` doesn't create assessment** | `submit_review` with `decision='request_info'` sets `status='info_requested'` but never creates an `AssessmentSession`. The auto-trigger only exists in the Node 2 `event_consumer` path. RM-initiated `request_info` leaves the application in `info_requested` with no chat session. | In `rm.py` `submit_review`, when `decision == 'request_info'`, call `_start_assessment_session(application_id, applicant_data)` in the background — same helper that the Node 2 path uses. |
+| **No applicant notifications on final outcomes** | When a pipeline completes (approved, rejected, disbursed), the applicant receives no email or SMS. The outreach system handles *stale* apps but nothing triggers a "your loan is approved" / "your loan was rejected" notification on pipeline end. | In `event_consumer.py` `pipeline.completed` handler, fire `_send_notification()` for `final_status` ∈ {`completed`, `rejected`, `disbursed`} — same pattern as the existing eligibility email. |
+
+### Stub / incomplete infrastructure
+
+| Item | What's There | What's Missing |
+|------|-------------|----------------|
+| **notification-service `event_consumer.py`** | Class with `connect/consume/ack/close` stubs, all `pass` | Actual Redis XREADGROUP loop; event → notification task dispatch. Currently notifications only reach applicants via the two direct HTTP calls (outreach agent, eligibility email). Pipeline outcome notifications (approved/rejected/disbursed) fall through completely. |
+
+---
+
 ## Remaining Opportunities (Post-MVP)
 
 | Item | Notes |
 |------|-------|
-| **Set `DATABASE_URL` on Railway** | Required for DB-backed endpoints to work; `start.sh` will keep retrying migrations on each deploy once it's set |
-| **Set `REDIS_STREAMS_URL` / `REDIS_CELERY_URL` on Railway** | Required for event bus and Celery workers; service starts without them but events won't flow |
-| **Set `ANTHROPIC_API_KEY` on Railway** | Required for all LLM calls (assessment, negotiation, outreach) |
+| **Set `DATABASE_URL` on Railway** | Required for DB-backed endpoints to work; `start.sh` retries migrations on each deploy once set |
+| **Set `REDIS_STREAMS_URL` / `REDIS_CELERY_URL` on Railway** | Required for event bus and Celery workers |
+| **Set `ANTHROPIC_API_KEY` on Railway** | Required for all LLM calls |
 | **pgvector RAG seeding** | compliance_policies collection; `/seed-rag` skill available |
 | **Real bank disbursement API** | Replace deterministic stub in `retry_disbursement` with live IMPS/NEFT call; retry skeleton already in place |
