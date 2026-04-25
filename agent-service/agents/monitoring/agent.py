@@ -14,12 +14,12 @@ from services.event_publisher import event_publisher
 
 logger = logging.getLogger(__name__)
 
-# Staleness thresholds per status
-STALE_THRESHOLDS: dict[str, int] = {
-    "pending":        2,    # hours — submitted but pipeline never started
-    "processing":     1,    # hours — pipeline running but no update for 1h (likely stuck)
-    "pending_review": 24,   # hours — HITL requested but RM hasn't acted
-    "info_requested": 24,   # hours — applicant hasn't completed assessment chat
+# Staleness thresholds per status (in hours — fractions supported for demo)
+STALE_THRESHOLDS: dict[str, float] = {
+    "pending":        0.05,  # ~3 min — submitted but pipeline never started
+    "processing":     0.05,  # ~3 min — pipeline stuck mid-run
+    "pending_review": 0.05,  # ~3 min — HITL requested but RM hasn't acted
+    "info_requested": 0.05,  # ~3 min — applicant hasn't completed assessment chat
 }
 
 # Max outreach attempts before we stop (checked via audit_log count)
