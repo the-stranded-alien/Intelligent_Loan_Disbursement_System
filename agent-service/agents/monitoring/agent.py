@@ -22,6 +22,7 @@ STALE_THRESHOLDS: dict[str, float] = {
     "processing":     0.05,  # ~3 min — pipeline stuck mid-run
     "pending_review": 0.05,  # ~3 min — HITL requested but RM hasn't acted
     "info_requested": 0.05,  # ~3 min — applicant hasn't completed assessment chat
+    "kyc_pending":    0.05,  # ~3 min — assessment passed but KYC docs not uploaded
 }
 
 # Max outreach attempts before we stop (checked via audit_log count)

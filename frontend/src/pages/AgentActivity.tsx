@@ -89,10 +89,27 @@ function SectionHeader({ icon: Icon, title, color }: { icon: React.ElementType; 
 
 export default function AgentActivity() {
   const navigate = useNavigate()
-  const [data, setData]       = useState<AgentData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState('')
+  const [data, setData]           = useState<AgentData | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState('')
   const [lastFetch, setLastFetch] = useState<Date | null>(null)
+  const [scanning, setScanning]   = useState(false)
+  const [scanMsg, setScanMsg]     = useState('')
+
+  async function triggerScan() {
+    setScanning(true)
+    setScanMsg('')
+    try {
+      const res = await fetch('/api/v1/analytics/trigger-monitoring', { method: 'POST' })
+      const body = await res.json()
+      setScanMsg(body.message || body.status || 'Scan queued')
+      setTimeout(() => load(true), 4000)  // refresh after worker has time to run
+    } catch {
+      setScanMsg('Failed to trigger scan')
+    } finally {
+      setScanning(false)
+    }
+  }
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -138,6 +155,17 @@ export default function AgentActivity() {
             Polling 10s
           </div>
           <button
+            onClick={triggerScan}
+            disabled={scanning}
+            title="Run monitoring scan now"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            {scanning
+              ? <Loader2 size={12} className="animate-spin" />
+              : <Bot size={12} />}
+            Run Scan
+          </button>
+          <button
             onClick={() => load()}
             disabled={loading}
             className="p-2 rounded-xl bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.1] transition-colors disabled:opacity-40"
@@ -146,6 +174,12 @@ export default function AgentActivity() {
           </button>
         </div>
       </div>
+
+      {scanMsg && (
+        <div className="flex items-center gap-2 text-xs text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 rounded-xl px-4 py-2">
+          <CheckCircle2 size={13} /> {scanMsg} — results will appear below in a few seconds.
+        </div>
+      )}
 
       {/* ── Error ── */}
       {error && (

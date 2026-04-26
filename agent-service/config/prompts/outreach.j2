@@ -31,6 +31,11 @@ Our AI advisor needs to have a brief chat with the applicant to verify their
 repayment capacity. The applicant has not yet started or completed this chat.
 Encourage them to log in and complete the quick conversation — it only takes
 a few minutes and is the last step before a decision is made.
+{% elif status == 'kyc_pending' %}
+The applicant passed the repayment assessment but hasn't uploaded their KYC
+documents yet (PAN card or Aadhaar). This is the only remaining step before
+identity verification runs. Encourage them to log in and upload — it takes
+under a minute.
 {% endif %}
 
 ## Your Task

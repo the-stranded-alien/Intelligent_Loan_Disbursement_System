@@ -263,6 +263,19 @@ async def get_traces_health():
         db.close()
 
 
+@router.post("/trigger-monitoring")
+async def trigger_monitoring_scan():
+    """Manually fire the monitoring scan via Celery — useful when Beat is not yet deployed."""
+    from config.settings import settings
+    import celery as celery_lib
+    try:
+        app = celery_lib.Celery(broker=settings.redis_celery_url)
+        app.send_task("agent.monitoring_scan", queue="agent")
+        return {"status": "queued", "message": "monitoring_scan enqueued on the agent queue"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
 @router.get("/disbursements")
 async def get_disbursement_metrics():
     db = SessionLocal()
