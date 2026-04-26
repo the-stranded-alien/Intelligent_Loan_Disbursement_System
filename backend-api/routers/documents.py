@@ -60,14 +60,27 @@ async def upload_document(
                 payload={"document_type": document_type, "filename": filename},
                 created_at=datetime.now(timezone.utc),
             ))
+            # Mark identity_verification as completed in the timeline immediately
+            # so the UI updates without waiting for the pipeline event round-trip.
+            db.add(AuditLog(
+                id=str(uuid.uuid4()),
+                application_id=application_id,
+                event_type="stage.identity_verification.completed",
+                actor="kyc-gate",
+                payload={"stage": "identity_verification", "result": {
+                    "kyc_status": "verified",
+                    "document_type": document_type,
+                    "note": "KYC document submitted by applicant",
+                }},
+                created_at=datetime.now(timezone.utc),
+            ))
             kyc_triggered = True
 
         db.commit()
         db.refresh(doc)
 
         if kyc_triggered:
-            # Publish to the HITL decisions stream so the agent-service
-            # hitl_consumer enqueues resume_pipeline from identity_verification.
+            # Resume pipeline from identity_verification interrupt.
             event_publisher.publish(
                 stream="loan:hitl:decisions",
                 event_type="hitl.decision",
@@ -78,6 +91,13 @@ async def upload_document(
                     "rm_id": "kyc-gate",
                 },
             )
+            # Broadcast node.completed for identity_verification so the live
+            # timeline ticks to "verified" before the pipeline event arrives.
+            await websocket_manager.broadcast(application_id, {
+                "event": "node.completed",
+                "stage": "identity_verification",
+                "data": {"stage": "identity_verification"},
+            })
             await websocket_manager.broadcast(application_id, {
                 "event": "kyc_docs_submitted",
                 "document_type": document_type,

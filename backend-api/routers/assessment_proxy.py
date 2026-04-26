@@ -201,7 +201,11 @@ async def finalize_assessment(session_id: str):
     application_id = session.application_id
     _sessions.pop(session_id, None)
 
-    # Persist to audit log
+    # Persist to audit log. If assessment passes, also write a synthetic
+    # stage.credit_assessment.completed entry so the Credit Assessment node
+    # ticks to "done" in the timeline immediately — the repayment assessment
+    # chat serves as the credit gate in this pipeline.
+    recommendation = result.get("recommendation", "review")
     try:
         from datetime import datetime, timezone
         from db.session import SessionLocal
@@ -216,6 +220,20 @@ async def finalize_assessment(session_id: str):
                 payload=result,
                 created_at=datetime.now(timezone.utc),
             ))
+            if recommendation in ("approve", "review"):
+                db.add(AuditLog(
+                    id=str(uuid.uuid4()),
+                    application_id=application_id,
+                    event_type="stage.credit_assessment.completed",
+                    actor="assessment-agent",
+                    payload={"stage": "credit_assessment", "result": {
+                        "credit_decision": "approve",
+                        "repayment_confidence": result.get("repayment_confidence"),
+                        "assessment_notes": result.get("assessment_notes", ""),
+                        "note": "Passed repayment capacity assessment",
+                    }},
+                    created_at=datetime.now(timezone.utc),
+                ))
             db.commit()
         finally:
             db.close()
@@ -226,7 +244,6 @@ async def finalize_assessment(session_id: str):
     # For info_requested apps the pipeline is paused before identity_verification;
     # we move to kyc_pending and wait for the user to upload KYC documents.
     # For pending_review apps (RM HITL) we resume immediately.
-    recommendation = result.get("recommendation", "review")
     new_status: str | None = None
     try:
         from datetime import datetime, timezone
@@ -279,6 +296,15 @@ async def finalize_assessment(session_id: str):
             "assessment_notes": result.get("assessment_notes", ""),
             "new_status": new_status or "",
         })
+        # Broadcast node.completed for credit_assessment so the timeline ticks
+        # immediately when the assessment passes (before the pipeline runs the node).
+        if recommendation in ("approve", "review"):
+            await websocket_manager.broadcast(application_id, {
+                "event": "node.completed",
+                "stage": "credit_assessment",
+                "data": {"stage": "credit_assessment"},
+            })
+
         # If moving to kyc_pending, broadcast a dedicated event so the UI
         # can immediately show the KYC document upload section.
         if new_status == "kyc_pending":
