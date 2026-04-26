@@ -43,12 +43,12 @@ async def upload_document(
         )
         db.add(doc)
 
-        # KYC gate: if app is waiting for KYC documents, this upload satisfies
-        # the gate — resume the LangGraph pipeline from the identity_verification
-        # interrupt. We move the app back to "processing" immediately so the
-        # status badge updates before the pipeline event arrives.
+        # KYC gate: if app is paused at the identity_verification interrupt
+        # (status is info_requested OR kyc_pending), this upload satisfies the
+        # gate and resumes the pipeline. We update status immediately so the
+        # badge updates before the pipeline event arrives.
         kyc_triggered = False
-        if app.status == "kyc_pending":
+        if app.status in ("kyc_pending", "info_requested"):
             app.status = "processing"
             app.current_stage = "identity_verification"
             app.updated_at = datetime.now(timezone.utc)

@@ -104,7 +104,8 @@ type StageStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 // Virtual stages are not real pipeline nodes — map them to the last real
 // completed stage so the timeline renders correctly.
 const VIRTUAL_STAGE_MAP: Record<string, string> = {
-  kyc_pending: 'lead_qualification',
+  kyc_pending:    'lead_qualification',
+  info_requested: 'lead_qualification',
 }
 
 function getStatus(

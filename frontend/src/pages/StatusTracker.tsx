@@ -429,8 +429,8 @@ export default function StatusTracker() {
             )
           })()}
 
-          {/* ── KYC Document Upload (shown only when assessment passed and KYC docs are required) ── */}
-          {status.status === 'kyc_pending' && (
+          {/* ── KYC Document Upload — shown whenever the pipeline is paused at the KYC gate ── */}
+          {(status.status === 'kyc_pending' || status.status === 'info_requested') && (
             <div className="card p-5 space-y-3 border-orange-200 dark:border-orange-500/30 ring-1 ring-orange-200 dark:ring-orange-500/20">
               <div className="flex items-center gap-2">
                 <Upload size={14} className="text-orange-500" />
@@ -443,7 +443,7 @@ export default function StatusTracker() {
               <div className="flex items-start gap-2 bg-orange-50 dark:bg-orange-500/10 rounded-xl px-3 py-2">
                 <AlertCircle size={13} className="text-orange-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-orange-700 dark:text-orange-300">
-                  Repayment assessment passed. Please upload your KYC documents (PAN card or Aadhaar) to proceed to identity verification.
+                  Upload at least one KYC document (PAN card or Aadhaar) to proceed to identity verification. At least one document is required.
                 </p>
               </div>
 
