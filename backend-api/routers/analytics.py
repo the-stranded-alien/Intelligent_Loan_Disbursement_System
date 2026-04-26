@@ -173,23 +173,43 @@ async def get_evaluation_metrics():
     """Per-node aggregated metrics from agent_traces: token usage, latency, call count."""
     db = SessionLocal()
     try:
-        rows = (
-            db.query(
-                AgentTrace.node_name,
-                AgentTrace.agent_role,
-                func.count(AgentTrace.id).label("call_count"),
-                func.avg(AgentTrace.duration_ms).label("avg_latency_ms"),
-                func.avg(AgentTrace.input_tokens).label("avg_input_tokens"),
-                func.avg(AgentTrace.output_tokens).label("avg_output_tokens"),
-                func.sum(AgentTrace.input_tokens).label("total_input_tokens"),
-                func.sum(AgentTrace.output_tokens).label("total_output_tokens"),
+        # agent_traces may not exist yet (migration 0007 pending) — return zeros
+        # rather than crashing so the dashboard still loads with pipeline stats.
+        per_node = []
+        traces_missing = False
+        try:
+            rows = (
+                db.query(
+                    AgentTrace.node_name,
+                    AgentTrace.agent_role,
+                    func.count(AgentTrace.id).label("call_count"),
+                    func.avg(AgentTrace.duration_ms).label("avg_latency_ms"),
+                    func.avg(AgentTrace.input_tokens).label("avg_input_tokens"),
+                    func.avg(AgentTrace.output_tokens).label("avg_output_tokens"),
+                    func.sum(AgentTrace.input_tokens).label("total_input_tokens"),
+                    func.sum(AgentTrace.output_tokens).label("total_output_tokens"),
+                )
+                .group_by(AgentTrace.node_name, AgentTrace.agent_role)
+                .order_by(AgentTrace.node_name)
+                .all()
             )
-            .group_by(AgentTrace.node_name, AgentTrace.agent_role)
-            .order_by(AgentTrace.node_name)
-            .all()
-        )
+            per_node = [
+                {
+                    "node_name":           r.node_name,
+                    "agent_role":          r.agent_role,
+                    "call_count":          r.call_count,
+                    "avg_latency_ms":      round(float(r.avg_latency_ms or 0), 1),
+                    "avg_input_tokens":    round(float(r.avg_input_tokens or 0), 1),
+                    "avg_output_tokens":   round(float(r.avg_output_tokens or 0), 1),
+                    "total_input_tokens":  int(r.total_input_tokens or 0),
+                    "total_output_tokens": int(r.total_output_tokens or 0),
+                }
+                for r in rows
+            ]
+        except Exception:
+            traces_missing = True
 
-        # Pipeline-level stats from application table
+        # Pipeline-level stats always come from the applications table
         total_apps = db.query(func.count(Application.id)).scalar() or 0
         hitl_apps  = db.query(func.count(Application.id)).filter(
             Application.status.in_(["pending_review", "approved", "completed"])
@@ -202,19 +222,8 @@ async def get_evaluation_metrics():
         ).scalar() or 0
 
         return {
-            "per_node": [
-                {
-                    "node_name":          r.node_name,
-                    "agent_role":         r.agent_role,
-                    "call_count":         r.call_count,
-                    "avg_latency_ms":     round(float(r.avg_latency_ms or 0), 1),
-                    "avg_input_tokens":   round(float(r.avg_input_tokens or 0), 1),
-                    "avg_output_tokens":  round(float(r.avg_output_tokens or 0), 1),
-                    "total_input_tokens": int(r.total_input_tokens or 0),
-                    "total_output_tokens": int(r.total_output_tokens or 0),
-                }
-                for r in rows
-            ],
+            "per_node": per_node,
+            "traces_missing": traces_missing,
             "pipeline": {
                 "total_applications":  total_apps,
                 "hitl_rate_pct":       round(hitl_apps / total_apps * 100, 1) if total_apps else 0,
@@ -222,6 +231,33 @@ async def get_evaluation_metrics():
                 "rejection_rate_pct":  round(rejected   / total_apps * 100, 1) if total_apps else 0,
             },
         }
+    finally:
+        db.close()
+
+
+@router.get("/traces-health")
+async def get_traces_health():
+    """Diagnostic: verify agent_traces table exists and show write counts."""
+    db = SessionLocal()
+    try:
+        try:
+            total = db.query(func.count(AgentTrace.id)).scalar() or 0
+            recent = (
+                db.query(AgentTrace.node_name, AgentTrace.application_id, AgentTrace.created_at)
+                .order_by(desc(AgentTrace.created_at))
+                .limit(5)
+                .all()
+            )
+            return {
+                "table_exists": True,
+                "total_traces": total,
+                "recent": [
+                    {"node": r.node_name, "app_id": r.application_id, "at": str(r.created_at)}
+                    for r in recent
+                ],
+            }
+        except Exception as e:
+            return {"table_exists": False, "error": str(e), "fix": "Run: alembic upgrade head (migration 0007)"}
     finally:
         db.close()
 

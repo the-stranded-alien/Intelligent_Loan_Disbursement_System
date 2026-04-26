@@ -11,6 +11,8 @@ from datetime import datetime, timezone, timedelta
 
 from config.settings import settings
 from services.event_publisher import event_publisher
+from db.session import SessionLocal, Application, AuditLog
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +34,6 @@ def run_monitoring_scan() -> list[dict]:
     Returns a list of stale application dicts — each will trigger an outreach.
     Publishes outreach.required events for applications that qualify.
     """
-    # Import here to avoid circular imports at module load time
-    from db.session import SessionLocal, Application, AuditLog
-    from sqlalchemy import func
-
     db = SessionLocal()
     stale_apps = []
 

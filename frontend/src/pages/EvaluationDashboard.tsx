@@ -25,6 +25,12 @@ interface PipelineMetric {
   rejection_rate_pct: number
 }
 
+interface EvalMetrics {
+  per_node: NodeMetric[]
+  pipeline: PipelineMetric
+  traces_missing?: boolean
+}
+
 interface Trace {
   id: string
   agent_role: string
@@ -164,7 +170,7 @@ function TraceCard({ trace }: { trace: Trace }) {
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function EvaluationDashboard() {
-  const [metrics, setMetrics]   = useState<{ per_node: NodeMetric[]; pipeline: PipelineMetric } | null>(null)
+  const [metrics, setMetrics]   = useState<EvalMetrics | null>(null)
   const [traces, setTraces]     = useState<Trace[]>([])
   const [appId, setAppId]       = useState('')
   const [searching, setSearching] = useState(false)
@@ -235,6 +241,18 @@ export default function EvaluationDashboard() {
           <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
+
+      {/* ── Traces-missing warning ── */}
+      {metrics?.traces_missing && (
+        <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl px-4 py-3">
+          <AlertCircle size={14} />
+          <span>
+            <strong>agent_traces table missing</strong> — migration 0007 has not been applied.
+            Redeploy the backend to run <code className="font-mono text-xs bg-amber-100 dark:bg-amber-500/20 px-1 rounded">alembic upgrade head</code>.
+            Pipeline health stats below are still accurate.
+          </span>
+        </div>
+      )}
 
       {/* ── Summary pills ── */}
       {metrics && (

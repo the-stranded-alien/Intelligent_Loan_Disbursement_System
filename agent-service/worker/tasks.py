@@ -7,6 +7,8 @@ from graph.graph import build_graph
 from graph.checkpointer import get_checkpointer
 from graph.state import ApplicationState
 from services.event_publisher import event_publisher
+from agents.monitoring.agent import run_monitoring_scan
+from agents.outreach.agent import run_outreach as _run_outreach_agent
 
 logger = logging.getLogger(__name__)
 
@@ -60,20 +62,29 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
         checkpointer = await get_checkpointer()
         graph = build_graph(checkpointer=checkpointer)
 
-        # First ainvoke — runs Nodes 1–4 then pauses before art_negotiation
-        # (due to interrupt_before). If pipeline rejects early (Node 1/2/3/4),
-        # ainvoke also returns but the graph has no next nodes.
+        # First ainvoke — runs Nodes 1–2 (lead_capture + lead_qualification)
+        # then pauses before identity_verification.
+        # If pipeline rejects at Node 1 (ineligible) the graph ends instead.
         result = await graph.ainvoke(initial_state, config=config)
-
-        # Reliable interrupt detection: if graph.next is non-empty the
-        # pipeline was paused (interrupted); if empty it reached END.
         snapshot = await graph.aget_state(config)
-        is_interrupted = bool(snapshot.next)
+        next_nodes = set(snapshot.next or [])
 
-        loan_amount = result.get("loan_amount", 0)
+        if "identity_verification" in next_nodes:
+            # Assessment is always required before KYC runs — this ensures the
+            # repayment chat is never skipped even when qualification returns "pass".
+            event_publisher.publish(
+                stream="loan:events",
+                event_type="assessment_required",
+                payload={
+                    "application_id": application_id,
+                    "stage_results": result.get("stage_results", {}),
+                },
+            )
+            logger.info("Pipeline paused for assessment: %s", application_id)
+            return result
 
-        if is_interrupted:
-            # Pipeline paused before art_negotiation — large loan → wait for RM.
+        if "art_negotiation" in next_nodes:
+            loan_amount = result.get("loan_amount", 0)
             if loan_amount > settings.hitl_threshold:
                 event_publisher.publish(
                     stream="loan:events",
@@ -86,12 +97,11 @@ def run_pipeline(self: Task, application_id: str, initial_data: dict) -> dict:
                 )
                 logger.info("Pipeline paused for HITL: %s (₹%s)", application_id, loan_amount)
                 return result
-
             # Small loan — auto-resume through art_negotiation → enach → esign.
             result = await graph.ainvoke(None, config=config)
             _publish_completed(application_id, result, "completed")
-        else:
-            # Pipeline ended early (rejected at Node 1/2/3/4).
+        elif not next_nodes:
+            # Graph reached END — rejected early (ineligible / hard fail).
             _publish_completed(application_id, result, "rejected")
 
         return result
@@ -126,10 +136,12 @@ def _publish_completed(application_id: str, result: dict, final_status: str):
     queue="agent",
 )
 def resume_pipeline(self: Task, application_id: str, hitl_decision: dict) -> dict:
-    """Resume a pipeline that was interrupted at the HITL node.
+    """Resume a pipeline that was interrupted at identity_verification (after
+    assessment) or at art_negotiation (after RM HITL review).
 
-    Injects the RM decision into the checkpoint state, then resumes the graph
-    from art_negotiation through enach → esign.
+    Checks the current interrupt point before injecting state so that an
+    assessment-approval resume doesn't pre-fill hitl_decision and bypass the
+    RM gate on large loans.
     """
     config = {"configurable": {"thread_id": application_id}}
 
@@ -137,24 +149,54 @@ def resume_pipeline(self: Task, application_id: str, hitl_decision: dict) -> dic
         checkpointer = await get_checkpointer()
         graph = build_graph(checkpointer=checkpointer)
 
-        await graph.aupdate_state(
-            config,
-            values={
-                "hitl_decision": hitl_decision.get("decision"),
-                "hitl_notes": hitl_decision.get("notes", ""),
-                "rm_id": hitl_decision.get("rm_id", ""),
-            },
-        )
+        snapshot = await graph.aget_state(config)
+        current_next = set(snapshot.next or [])
 
+        if "art_negotiation" in current_next:
+            # RM HITL resume — inject decision so route_after_art can see it.
+            await graph.aupdate_state(
+                config,
+                values={
+                    "hitl_decision": hitl_decision.get("decision"),
+                    "hitl_notes": hitl_decision.get("notes", ""),
+                    "rm_id": hitl_decision.get("rm_id", ""),
+                },
+            )
+            result = await graph.ainvoke(None, config=config)
+            decision = hitl_decision.get("decision", "approve")
+            final_status = "completed" if decision == "approve" else "rejected"
+            _publish_completed(application_id, result, final_status)
+            return result
+
+        # Assessment resume — paused at identity_verification.
+        # Do NOT inject hitl_decision here; that field is for RM HITL only.
         result = await graph.ainvoke(None, config=config)
+        snapshot = await graph.aget_state(config)
+        next_nodes = set(snapshot.next or [])
+
+        if "art_negotiation" in next_nodes:
+            loan_amount = result.get("loan_amount", 0)
+            if loan_amount > settings.hitl_threshold:
+                event_publisher.publish(
+                    stream="loan:events",
+                    event_type="hitl.requested",
+                    payload={
+                        "application_id": application_id,
+                        "loan_amount": loan_amount,
+                        "stage_results": result.get("stage_results", {}),
+                    },
+                )
+                logger.info("Pipeline paused for HITL after assessment: %s", application_id)
+                return result
+            # Small loan — continue through art → enach → esign.
+            result = await graph.ainvoke(None, config=config)
+
+        _publish_completed(application_id, result, "completed")
         return result
 
     try:
         result = asyncio.run(_resume())
-        decision = hitl_decision.get("decision", "approve")
-        final_status = "completed" if decision == "approve" else "rejected"
-        _publish_completed(application_id, result, final_status)
-        logger.info("Pipeline resumed and completed for %s", application_id)
+        logger.info("Pipeline resumed for %s, stage=%s", application_id, result.get("current_stage"))
         return {"application_id": application_id, "stage": result.get("current_stage")}
     except Exception as exc:
         logger.error("Resume pipeline error for %s: %s", application_id, exc)
@@ -220,11 +262,8 @@ def run_outreach(self: Task, payload: dict) -> dict:
     Generate and dispatch a personalised follow-up message for a stale application.
     Triggered directly by the monitoring agent.
     """
-    import asyncio
-    from agents.outreach.agent import run_outreach as _run_outreach
-
     try:
-        result = asyncio.run(_run_outreach(payload))
+        result = asyncio.run(_run_outreach_agent(payload))
         logger.info("Outreach sent for %s (attempt %d)", payload.get("application_id"), payload.get("outreach_attempt", 1))
         return result
     except Exception as exc:
@@ -241,9 +280,8 @@ def monitoring_scan() -> dict:
     Scheduled task: scan all open applications for staleness and publish
     outreach.required events for any that haven't been updated within threshold.
 
-    Run by Celery Beat every hour.
+    Run by Celery Beat every 2 minutes.
     """
-    from agents.monitoring.agent import run_monitoring_scan
     stale = run_monitoring_scan()
     logger.info("monitoring_scan: %d stale applications flagged", len(stale))
     return {"stale_count": len(stale), "applications": [a["application_id"] for a in stale]}

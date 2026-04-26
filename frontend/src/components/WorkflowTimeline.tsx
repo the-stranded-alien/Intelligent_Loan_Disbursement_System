@@ -101,6 +101,12 @@ const STAGE_FIELDS: Record<string, Array<{ key: string; label: string; type: 'te
 
 type StageStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 
+// Virtual stages are not real pipeline nodes — map them to the last real
+// completed stage so the timeline renders correctly.
+const VIRTUAL_STAGE_MAP: Record<string, string> = {
+  kyc_pending: 'lead_qualification',
+}
+
 function getStatus(
   key: string,
   currentStage: string | null | undefined,
@@ -108,7 +114,8 @@ function getStatus(
   activeStage: string | null,
 ): StageStatus {
   if (!currentStage) return 'pending'
-  const ci = STAGES.findIndex(s => s.key === currentStage)
+  const resolvedStage = VIRTUAL_STAGE_MAP[currentStage] ?? currentStage
+  const ci = STAGES.findIndex(s => s.key === resolvedStage)
   const si = STAGES.findIndex(s => s.key === key)
 
   if (appStatus === 'rejected' && si === ci) return 'failed'

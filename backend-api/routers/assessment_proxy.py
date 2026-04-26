@@ -222,7 +222,10 @@ async def finalize_assessment(session_id: str):
     except Exception as e:
         logger.warning("Failed to save assessment result for %s: %s", application_id, e)
 
-    # Act on the recommendation — update status and optionally resume pipeline
+    # Act on the recommendation — update status but do NOT resume the pipeline yet.
+    # For info_requested apps the pipeline is paused before identity_verification;
+    # we move to kyc_pending and wait for the user to upload KYC documents.
+    # For pending_review apps (RM HITL) we resume immediately.
     recommendation = result.get("recommendation", "review")
     new_status: str | None = None
     try:
@@ -236,21 +239,28 @@ async def finalize_assessment(session_id: str):
                 if recommendation == "reject":
                     app.status = "rejected"
                     new_status = "rejected"
-                elif recommendation == "approve" and app.status == "pending_review":
-                    app.status = "approved"
-                    new_status = "approved"
-                    # Trigger agent-service to resume the pipeline
-                    from services.event_publisher import event_publisher
-                    event_publisher.publish(
-                        stream="loan:hitl:decisions",
-                        event_type="hitl.decision",
-                        payload={
-                            "application_id": application_id,
-                            "decision": "approve",
-                            "notes": result.get("assessment_notes", "Approved via repayment assessment"),
-                            "rm_id": "assessment-agent",
-                        },
-                    )
+                elif recommendation in ("approve", "review"):
+                    if app.status == "info_requested":
+                        # Assessment done — now wait for KYC document upload before
+                        # resuming the pipeline (identity_verification gate).
+                        new_status = "kyc_pending"
+                        app.status = "kyc_pending"
+                        app.current_stage = "kyc_pending"
+                    elif app.status == "pending_review":
+                        # RM HITL assessment approval — resume pipeline at art_negotiation.
+                        new_status = "processing"
+                        app.status = "processing"
+                        from services.event_publisher import event_publisher
+                        event_publisher.publish(
+                            stream="loan:hitl:decisions",
+                            event_type="hitl.decision",
+                            payload={
+                                "application_id": application_id,
+                                "decision": "approve",
+                                "notes": result.get("assessment_notes", "Approved via repayment assessment"),
+                                "rm_id": "assessment-agent",
+                            },
+                        )
                 if new_status:
                     app.updated_at = datetime.now(timezone.utc)
                     db2.commit()
@@ -267,8 +277,15 @@ async def finalize_assessment(session_id: str):
             "recommendation": recommendation,
             "repayment_confidence": result.get("repayment_confidence"),
             "assessment_notes": result.get("assessment_notes", ""),
-            **({"new_status": new_status} if new_status else {}),
+            "new_status": new_status or "",
         })
+        # If moving to kyc_pending, broadcast a dedicated event so the UI
+        # can immediately show the KYC document upload section.
+        if new_status == "kyc_pending":
+            await websocket_manager.broadcast(application_id, {
+                "event": "kyc_required",
+                "message": "Assessment approved. Please upload your KYC documents to continue.",
+            })
     except Exception as e:
         logger.warning("Failed to broadcast assessment result for %s: %s", application_id, e)
 

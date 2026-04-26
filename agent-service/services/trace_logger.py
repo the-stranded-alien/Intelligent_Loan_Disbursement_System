@@ -8,6 +8,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from db.session import SessionLocal, AgentTrace
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,14 +24,13 @@ def log_trace(
     metrics: dict,
     model: str = "claude-sonnet-4-6",
 ) -> None:
-    """Write a single AgentTrace row. Errors are swallowed so a trace failure
-    never breaks the pipeline."""
+    """Write a single AgentTrace row. Errors are logged but never bubble up."""
+    trace_id = str(uuid.uuid4())
     try:
-        from db.session import SessionLocal, AgentTrace
         db = SessionLocal()
         try:
             db.add(AgentTrace(
-                id=str(uuid.uuid4()),
+                id=trace_id,
                 application_id=application_id,
                 agent_role=agent_role,
                 node_name=node_name,
@@ -43,7 +44,8 @@ def log_trace(
                 created_at=datetime.now(timezone.utc),
             ))
             db.commit()
+            logger.info("trace_logger OK  node=%s app=%s trace=%s", node_name, application_id, trace_id)
         finally:
             db.close()
     except Exception as e:
-        logger.warning("trace_logger failed for %s/%s: %s", node_name, application_id, e)
+        logger.error("trace_logger FAIL node=%s app=%s error=%r", node_name, application_id, e)

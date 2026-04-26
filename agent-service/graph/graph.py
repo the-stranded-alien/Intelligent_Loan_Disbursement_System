@@ -91,5 +91,5 @@ def build_graph(checkpointer: AsyncPostgresSaver | None = None) -> StateGraph:
 
     return builder.compile(
         checkpointer=checkpointer,
-        interrupt_before=["art_negotiation"],
+        interrupt_before=["identity_verification", "art_negotiation"],
     )

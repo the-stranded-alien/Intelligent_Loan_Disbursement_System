@@ -1,11 +1,13 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 
 from db.session import SessionLocal
-from db.models import Document, Application
+from db.models import Document, Application, AuditLog
 from config.settings import settings
+from services.event_publisher import event_publisher
+from services.websocket_manager import websocket_manager
 
 router = APIRouter()
 
@@ -22,9 +24,11 @@ async def upload_document(
         if not app:
             raise HTTPException(status_code=404, detail="Application not found")
 
-        upload_dir = os.path.join(settings.local_storage_path, application_id)
+        # Save file (use /tmp as fallback so Railway ephemeral filesystem doesn't break uploads)
+        base_dir = getattr(settings, "local_storage_path", "/tmp/loan_docs")
+        upload_dir = os.path.join(base_dir, application_id)
         os.makedirs(upload_dir, exist_ok=True)
-        filename = f"{uuid.uuid4()}_{file.filename}"
+        filename = f"{uuid.uuid4()}_{file.filename or 'upload'}"
         file_path = os.path.join(upload_dir, filename)
         with open(file_path, "wb") as f:
             f.write(await file.read())
@@ -38,12 +42,53 @@ async def upload_document(
             created_at=datetime.utcnow(),
         )
         db.add(doc)
+
+        # KYC gate: if app is waiting for KYC documents, this upload satisfies
+        # the gate — resume the LangGraph pipeline from the identity_verification
+        # interrupt. We move the app back to "processing" immediately so the
+        # status badge updates before the pipeline event arrives.
+        kyc_triggered = False
+        if app.status == "kyc_pending":
+            app.status = "processing"
+            app.current_stage = "identity_verification"
+            app.updated_at = datetime.now(timezone.utc)
+            db.add(AuditLog(
+                id=str(uuid.uuid4()),
+                application_id=application_id,
+                event_type="kyc.docs_submitted",
+                actor="applicant",
+                payload={"document_type": document_type, "filename": filename},
+                created_at=datetime.now(timezone.utc),
+            ))
+            kyc_triggered = True
+
         db.commit()
         db.refresh(doc)
+
+        if kyc_triggered:
+            # Publish to the HITL decisions stream so the agent-service
+            # hitl_consumer enqueues resume_pipeline from identity_verification.
+            event_publisher.publish(
+                stream="loan:hitl:decisions",
+                event_type="hitl.decision",
+                payload={
+                    "application_id": application_id,
+                    "decision": "approve",
+                    "notes": f"KYC documents submitted ({document_type})",
+                    "rm_id": "kyc-gate",
+                },
+            )
+            await websocket_manager.broadcast(application_id, {
+                "event": "kyc_docs_submitted",
+                "document_type": document_type,
+                "message": "KYC documents received. Identity verification is now running.",
+            })
+
         return {
             "document_id": doc.id,
             "document_type": doc.document_type,
             "verification_status": doc.verification_status,
+            "kyc_triggered": kyc_triggered,
         }
     finally:
         db.close()

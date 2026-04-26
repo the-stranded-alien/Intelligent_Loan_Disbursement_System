@@ -206,9 +206,14 @@ async def get_application_traces(application_id: str):
                 .order_by(AgentTrace.created_at)
                 .all()
             )
-        except Exception:
-            # agent_traces table not yet migrated on this environment
-            return []
+        except Exception as e:
+            err = str(e).lower()
+            if "agent_traces" in err or "does not exist" in err or "undefined" in err:
+                raise HTTPException(
+                    status_code=503,
+                    detail="agent_traces table missing — migration 0007 has not been applied. Redeploy the backend to run alembic upgrade head.",
+                )
+            raise HTTPException(status_code=500, detail=f"Trace query error: {e}")
         return [
             {
                 "id": t.id,

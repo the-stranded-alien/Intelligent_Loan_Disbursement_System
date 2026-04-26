@@ -11,8 +11,18 @@ import uuid
 
 from config.settings import settings
 
+# Ensure we use the psycopg3 sync driver regardless of URL prefix.
+# Railway supplies "postgresql://" or "postgres://" — both must be mapped to
+# "postgresql+psycopg://" so SQLAlchemy picks up the installed psycopg3 package
+# (psycopg2 is NOT in agent-service requirements).
+_db_url = settings.database_url
+if _db_url.startswith("postgres://"):
+    _db_url = "postgresql+psycopg://" + _db_url[len("postgres://"):]
+elif _db_url.startswith("postgresql://"):
+    _db_url = "postgresql+psycopg://" + _db_url[len("postgresql://"):]
+
 engine = create_engine(
-    settings.database_url,
+    _db_url,
     pool_pre_ping=True,
     pool_size=2,
     max_overflow=2,

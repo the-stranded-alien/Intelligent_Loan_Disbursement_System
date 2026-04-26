@@ -17,6 +17,7 @@ from jinja2 import Environment, FileSystemLoader
 from config.settings import settings
 from services.event_publisher import event_publisher
 from services.json_parser import parse_llm_json
+from db.session import SessionLocal, AuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,6 @@ async def run_outreach(payload: dict) -> dict:
 
     # 3. Write outreach.sent to audit_log via agent-service DB session
     try:
-        from db.session import SessionLocal, AuditLog  # noqa: PLC0415
         db = SessionLocal()
         try:
             db.add(AuditLog(

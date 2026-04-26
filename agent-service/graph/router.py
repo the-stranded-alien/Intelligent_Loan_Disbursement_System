@@ -13,11 +13,12 @@ def route_after_lead_capture(state: ApplicationState) -> str:
 
 def route_after_qualification(state: ApplicationState) -> str:
     """Node 2 → Node 3 or END.
-    Only applicants with verified documents proceed to KYC.
-    request_info also halts — applicant must resubmit.
+    Both pass and request_info proceed to identity_verification where the
+    graph interrupts — request_info waits for repayment assessment, pass
+    auto-resumes. Hard fail routes to END.
     """
     result = state.get("qualification_result", "fail")
-    if result == "pass":
+    if result in ("pass", "request_info"):
         return "continue"
     return "reject"
 

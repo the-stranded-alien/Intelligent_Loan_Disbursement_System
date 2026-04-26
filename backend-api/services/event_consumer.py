@@ -105,45 +105,6 @@ class EventConsumer:
                 "data": payload,
             })
 
-            # Node 2: if qualification is "request_info", mark app as info_requested
-            # and auto-start an AssessmentSession so the applicant can chat immediately.
-            if stage == "lead_qualification":
-                stage_result = payload.get("stage_results", {}).get("lead_qualification", {})
-                if stage_result.get("qualification_result") == "request_info":
-                    db3 = SessionLocal()
-                    applicant_data: dict = {}
-                    try:
-                        app3 = db3.query(Application).filter(Application.id == application_id).first()
-                        if app3:
-                            app3.status = "info_requested"
-                            app3.updated_at = datetime.now(timezone.utc)
-                            db3.commit()
-                            applicant_data = {
-                                "full_name": app3.full_name or "",
-                                "monthly_income": float(app3.monthly_income or 0),
-                                "existing_emi_amount": float(app3.existing_emi_amount or 0),
-                                "loan_amount": float(app3.loan_amount or 0),
-                                "tenure_months": int(app3.tenure_months or 12),
-                                "employment_type": app3.employment_type or "salaried",
-                                "loan_purpose": app3.loan_purpose or "",
-                            }
-                    finally:
-                        db3.close()
-
-                    # Broadcast basic info_requested event first
-                    await websocket_manager.broadcast(application_id, {
-                        "event": "info_requested",
-                        "stage": "lead_qualification",
-                        "reason": stage_result.get("qualification_notes", ""),
-                    })
-
-                    # Auto-create assessment session — fire-and-forget
-                    if applicant_data:
-                        asyncio.create_task(_start_assessment_session(
-                            application_id=application_id,
-                            applicant_data=applicant_data,
-                        ))
-
             # Eligibility email: fire-and-forget when lead_capture passes
             if stage == "lead_capture":
                 stage_result = payload.get("stage_results", {}).get("lead_capture", {})
@@ -160,6 +121,41 @@ class EventConsumer:
                             ))
                     finally:
                         db2.close()
+
+        elif event_type == "assessment_required":
+            # Pipeline paused before identity_verification for repayment assessment.
+            # Fires for all apps (pass AND request_info) — assessment is always mandatory.
+            application_id = payload.get("application_id")
+            db = SessionLocal()
+            applicant_data: dict = {}
+            try:
+                app = db.query(Application).filter(Application.id == application_id).first()
+                if app:
+                    app.status = "info_requested"
+                    app.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+                    applicant_data = {
+                        "full_name": app.full_name or "",
+                        "monthly_income": float(app.monthly_income or 0),
+                        "existing_emi_amount": float(app.existing_emi_amount or 0),
+                        "loan_amount": float(app.loan_amount or 0),
+                        "tenure_months": int(app.tenure_months or 12),
+                        "employment_type": app.employment_type or "salaried",
+                        "loan_purpose": app.loan_purpose or "",
+                    }
+            finally:
+                db.close()
+
+            await websocket_manager.broadcast(application_id, {
+                "event": "assessment_required",
+                "stage": "lead_qualification",
+            })
+
+            if applicant_data:
+                asyncio.create_task(_start_assessment_session(
+                    application_id=application_id,
+                    applicant_data=applicant_data,
+                ))
 
         elif event_type == "hitl.requested":
             application_id = payload.get("application_id")

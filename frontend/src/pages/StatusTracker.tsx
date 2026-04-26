@@ -38,6 +38,7 @@ const STATUS_COLORS: Record<string, string> = {
   processing:     'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-400',
   pending_review: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
   info_requested: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400',
+  kyc_pending:    'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -69,7 +70,7 @@ export default function StatusTracker() {
 
   // Document upload state
   const [uploadFile, setUploadFile]     = useState<File | null>(null)
-  const [uploadType, setUploadType]     = useState('salary_slip')
+  const [uploadType, setUploadType]     = useState('pan_card')
   const [uploading, setUploading]       = useState(false)
   const [uploadMsg, setUploadMsg]       = useState('')
   const [uploadError, setUploadError]   = useState('')
@@ -108,8 +109,13 @@ export default function StatusTracker() {
       })
       // Refetch if status changed (approve/reject)
       if ((latest as any).new_status && appId) fetchStatus(appId)
+    } else if (latest.event === 'assessment_required') {
+      setStatus(s => s ? { ...s, status: 'info_requested' } : s)
+    } else if (latest.event === 'kyc_required') {
+      setStatus(s => s ? { ...s, status: 'kyc_pending', current_stage: 'kyc_pending' } : s)
+    } else if (latest.event === 'kyc_docs_submitted') {
+      setStatus(s => s ? { ...s, status: 'processing', current_stage: 'identity_verification' } : s)
     } else if (latest.event === 'pipeline.completed' || latest.event === 'hitl.requested') {
-      // Full refetch to get accurate final status
       if (appId) fetchStatus(appId)
     }
   }, [wsEvents])
@@ -173,8 +179,14 @@ export default function StatusTracker() {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.detail || `Upload failed (${res.status})`)
       }
-      setUploadMsg('Document uploaded successfully.')
+      const data = await res.json()
       setUploadFile(null)
+      if (data.kyc_triggered) {
+        setUploadMsg('KYC documents received. Identity verification is starting…')
+        setStatus(s => s ? { ...s, status: 'processing', current_stage: 'identity_verification' } : s)
+      } else {
+        setUploadMsg('Document uploaded successfully.')
+      }
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
@@ -417,22 +429,23 @@ export default function StatusTracker() {
             )
           })()}
 
-          {/* ── Document Upload (shown when info is requested or app is processing) ── */}
-          {(status.status === 'info_requested' || status.status === 'processing') && (
-            <div className="card p-5 space-y-3">
+          {/* ── KYC Document Upload (shown only when assessment passed and KYC docs are required) ── */}
+          {status.status === 'kyc_pending' && (
+            <div className="card p-5 space-y-3 border-orange-200 dark:border-orange-500/30 ring-1 ring-orange-200 dark:ring-orange-500/20">
               <div className="flex items-center gap-2">
-                <Upload size={14} className="text-violet-500" />
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Upload Document</h3>
+                <Upload size={14} className="text-orange-500" />
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Upload KYC Documents</h3>
+                <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400">
+                  Action Required
+                </span>
               </div>
 
-              {status.status === 'info_requested' && (
-                <div className="flex items-start gap-2 bg-violet-50 dark:bg-violet-500/10 rounded-xl px-3 py-2">
-                  <AlertCircle size={13} className="text-violet-500 mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-violet-600 dark:text-violet-300">
-                    Additional documents are required to continue processing your application.
-                  </p>
-                </div>
-              )}
+              <div className="flex items-start gap-2 bg-orange-50 dark:bg-orange-500/10 rounded-xl px-3 py-2">
+                <AlertCircle size={13} className="text-orange-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-orange-700 dark:text-orange-300">
+                  Repayment assessment passed. Please upload your KYC documents (PAN card or Aadhaar) to proceed to identity verification.
+                </p>
+              </div>
 
               <form onSubmit={handleUpload} className="space-y-3">
                 <div className="flex gap-2">
