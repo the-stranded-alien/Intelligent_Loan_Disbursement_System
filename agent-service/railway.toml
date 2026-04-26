@@ -5,3 +5,10 @@ dockerfilePath = "Dockerfile"
 [deploy]
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
+
+# All three agent-service Railway services use this same Dockerfile.
+# Set the SERVICE environment variable in each service's Railway settings:
+#
+#   Agent Service  (FastAPI consumer)  →  SERVICE=   (leave unset)
+#   Agent Worker   (Celery executor)   →  SERVICE=worker
+#   Agent Beat     (Celery scheduler)  →  SERVICE=beat
