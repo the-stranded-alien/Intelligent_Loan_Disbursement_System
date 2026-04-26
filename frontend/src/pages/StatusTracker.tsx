@@ -284,13 +284,23 @@ export default function StatusTracker() {
             const eligible = r.eligibility_result === 'eligible'
             const ineligible = r.eligibility_result === 'ineligible'
             if (!eligible && !ineligible) return null
+
+            // Only show the "eligible / KYC next" hint while still at the very
+            // first stage. Once the pipeline has moved past lead_capture, this
+            // banner is stale and should be hidden.
+            const earlyStatuses = new Set(['pending', 'processing'])
+            const stillAtStart = earlyStatuses.has(status.status) &&
+              (!status.current_stage || status.current_stage === 'lead_capture')
+
+            if (eligible && !stillAtStart) return null
+
             return eligible ? (
               <div className="flex items-start gap-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-4 py-3">
                 <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Eligible — KYC Step Next</p>
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Eligible — KYC Verification Next</p>
                   <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-0.5">
-                    Your application passed initial eligibility. Your identity will be verified next.
+                    Your application passed initial eligibility. Identity verification is running next.
                   </p>
                 </div>
               </div>
