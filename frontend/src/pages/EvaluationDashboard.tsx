@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   BarChart2, Brain, Search, ChevronDown, ChevronUp,
-  Zap, Clock, Hash, MessageSquare, RefreshCw, AlertCircle,
+  Zap, Clock, Hash, RefreshCw, AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -230,13 +230,6 @@ export default function EvaluationDashboard() {
 
   useEffect(() => { loadMetrics() }, [])
 
-  // Summary stats for the node metric cards
-  const totalCalls   = metrics?.per_node.reduce((s, r) => s + r.call_count, 0) ?? 0
-  const totalTokensIn  = metrics?.per_node.reduce((s, r) => s + r.total_input_tokens, 0) ?? 0
-  const totalTokensOut = metrics?.per_node.reduce((s, r) => s + r.total_output_tokens, 0) ?? 0
-  const avgLatency   = metrics?.per_node.length
-    ? Math.round(metrics.per_node.reduce((s, r) => s + r.avg_latency_ms, 0) / metrics.per_node.length)
-    : 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-slide-up">
@@ -275,24 +268,6 @@ export default function EvaluationDashboard() {
         </div>
       )}
 
-      {/* ── Summary pills ── */}
-      {metrics && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Total LLM Calls',   value: totalCalls,           icon: Brain },
-            { label: 'Avg Node Latency',  value: fmtMs(avgLatency),    icon: Clock },
-            { label: 'Total Input Tokens', value: totalTokensIn.toLocaleString(),  icon: Hash },
-            { label: 'Total Output Tokens', value: totalTokensOut.toLocaleString(), icon: MessageSquare },
-          ].map(({ label, value, icon: Icon }) => (
-            <div key={label} className="card p-4 space-y-1">
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                <Icon size={11} /> {label}
-              </div>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">{value}</p>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* ── Pipeline health ── */}
       {metrics && (
