@@ -170,20 +170,33 @@ function TraceCard({ trace }: { trace: Trace }) {
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function EvaluationDashboard() {
-  const [metrics, setMetrics]   = useState<EvalMetrics | null>(null)
-  const [traces, setTraces]     = useState<Trace[]>([])
-  const [appId, setAppId]       = useState('')
-  const [searching, setSearching] = useState(false)
+  const [metrics, setMetrics]       = useState<EvalMetrics | null>(null)
+  const [metricsError, setMetricsError] = useState('')
+  const [traces, setTraces]         = useState<Trace[]>([])
+  const [appId, setAppId]           = useState('')
+  const [searching, setSearching]   = useState(false)
   const [traceError, setTraceError] = useState('')
   const [loadingMetrics, setLoadingMetrics] = useState(true)
 
   async function loadMetrics() {
     setLoadingMetrics(true)
+    setMetricsError('')
     try {
       const res = await fetch('/api/v1/analytics/evaluation')
-      if (res.ok) setMetrics(await res.json())
-    } catch {}
-    finally { setLoadingMetrics(false) }
+      if (res.ok) {
+        setMetrics(await res.json())
+      } else {
+        const body = await res.json().catch(() => ({}))
+        setMetricsError(body.detail || `API error ${res.status}`)
+        // Still render the shell with empty data so the page isn't blank
+        setMetrics({ per_node: [], pipeline: { total_applications: 0, hitl_rate_pct: 0, completion_rate_pct: 0, rejection_rate_pct: 0 }, traces_missing: true })
+      }
+    } catch (e) {
+      setMetricsError('Network error — could not reach the backend')
+      setMetrics({ per_node: [], pipeline: { total_applications: 0, hitl_rate_pct: 0, completion_rate_pct: 0, rejection_rate_pct: 0 }, traces_missing: true })
+    } finally {
+      setLoadingMetrics(false)
+    }
   }
 
   async function searchTraces(e: React.FormEvent) {
@@ -242,8 +255,16 @@ export default function EvaluationDashboard() {
         </button>
       </div>
 
+      {/* ── API error ── */}
+      {metricsError && (
+        <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-xl px-4 py-3">
+          <AlertCircle size={14} />
+          <span><strong>Failed to load metrics:</strong> {metricsError}</span>
+        </div>
+      )}
+
       {/* ── Traces-missing warning ── */}
-      {metrics?.traces_missing && (
+      {metrics?.traces_missing && !metricsError && (
         <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl px-4 py-3">
           <AlertCircle size={14} />
           <span>
