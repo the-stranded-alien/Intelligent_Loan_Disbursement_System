@@ -208,6 +208,7 @@ async def get_evaluation_metrics():
             ]
         except Exception:
             traces_missing = True
+            db.rollback()   # clear the aborted transaction so Application queries work
 
         # Pipeline-level stats always come from the applications table
         total_apps = db.query(func.count(Application.id)).scalar() or 0
