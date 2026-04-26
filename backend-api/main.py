@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,11 +8,46 @@ from config.settings import settings
 from routers import applications, analytics, documents, rm, webhooks, websocket, assessment_proxy
 from services.event_consumer import EventConsumer
 
+logger = logging.getLogger(__name__)
 consumer = EventConsumer()
+
+
+def _ensure_agent_traces_table() -> None:
+    """Create agent_traces if alembic missed it (e.g. DB not ready during startup)."""
+    from db.session import SessionLocal
+    sql = """
+    CREATE TABLE IF NOT EXISTS agent_traces (
+        id              VARCHAR PRIMARY KEY,
+        application_id  VARCHAR REFERENCES applications(id),
+        agent_role      VARCHAR NOT NULL,
+        node_name       VARCHAR NOT NULL,
+        prompt_rendered TEXT,
+        raw_llm_response TEXT,
+        parsed_output   JSON,
+        duration_ms     INTEGER,
+        model           VARCHAR,
+        input_tokens    INTEGER,
+        output_tokens   INTEGER,
+        created_at      TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS ix_agent_traces_application_id ON agent_traces(application_id);
+    CREATE INDEX IF NOT EXISTS ix_agent_traces_node_name      ON agent_traces(node_name);
+    """
+    db = SessionLocal()
+    try:
+        db.execute(__import__("sqlalchemy").text(sql))
+        db.commit()
+        logger.info("agent_traces table verified/created")
+    except Exception as e:
+        logger.warning("agent_traces ensure failed (will retry on next restart): %s", e)
+        db.rollback()
+    finally:
+        db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _ensure_agent_traces_table()
     await consumer.connect()
     task = asyncio.create_task(consumer.consume())
     yield
