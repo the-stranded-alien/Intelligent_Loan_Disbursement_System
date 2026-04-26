@@ -43,12 +43,12 @@ async def upload_document(
         )
         db.add(doc)
 
-        # KYC gate: if app is paused at the identity_verification interrupt
-        # (status is info_requested OR kyc_pending), this upload satisfies the
-        # gate and resumes the pipeline. We update status immediately so the
-        # badge updates before the pipeline event arrives.
+        # KYC gate: only resume the pipeline when status is kyc_pending, meaning
+        # the repayment assessment has already been completed. If status is
+        # info_requested the assessment is still required first — the doc is
+        # saved but the pipeline stays paused.
         kyc_triggered = False
-        if app.status in ("kyc_pending", "info_requested"):
+        if app.status == "kyc_pending":
             app.status = "processing"
             app.current_stage = "identity_verification"
             app.updated_at = datetime.now(timezone.utc)

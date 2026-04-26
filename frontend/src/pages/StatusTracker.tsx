@@ -185,7 +185,7 @@ export default function StatusTracker() {
         setUploadMsg('KYC documents received. Identity verification is starting…')
         setStatus(s => s ? { ...s, status: 'processing', current_stage: 'identity_verification' } : s)
       } else {
-        setUploadMsg('Document uploaded successfully.')
+        setUploadMsg('Document saved. Complete the repayment assessment chat above to continue.')
       }
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed')
@@ -429,21 +429,23 @@ export default function StatusTracker() {
             )
           })()}
 
-          {/* ── KYC Document Upload — shown whenever the pipeline is paused at the KYC gate ── */}
+          {/* ── KYC Document Upload — shown for info_requested (pre-upload) and kyc_pending (triggers resume) ── */}
           {(status.status === 'kyc_pending' || status.status === 'info_requested') && (
             <div className="card p-5 space-y-3 border-orange-200 dark:border-orange-500/30 ring-1 ring-orange-200 dark:ring-orange-500/20">
               <div className="flex items-center gap-2">
                 <Upload size={14} className="text-orange-500" />
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Upload KYC Documents</h3>
                 <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400">
-                  Action Required
+                  Required
                 </span>
               </div>
 
               <div className="flex items-start gap-2 bg-orange-50 dark:bg-orange-500/10 rounded-xl px-3 py-2">
                 <AlertCircle size={13} className="text-orange-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-orange-700 dark:text-orange-300">
-                  Upload at least one KYC document (PAN card or Aadhaar) to proceed to identity verification. At least one document is required.
+                  {status.status === 'kyc_pending'
+                    ? 'Assessment complete. Upload your PAN card or Aadhaar to start identity verification.'
+                    : 'Upload your KYC documents (PAN card or Aadhaar). Identity verification will begin after both the assessment chat and this upload are done.'}
                 </p>
               </div>
 
